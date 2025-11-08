@@ -16,7 +16,7 @@
     "test:watch": "NODE_OPTIONS=--experimental-vm-modules jest --watch",
     "test:coverage": "NODE_OPTIONS=--experimental-vm-modules jest --coverage",
     "precommit": "npm run lint:all",
-    "prepare": "husky"
+    "prepare": "husky || true"
   },
   "keywords": [
     "discord",
