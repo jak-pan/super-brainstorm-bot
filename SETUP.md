@@ -185,7 +185,9 @@ npm start
 
 2. Go to your Discord server and channel
 
-3. Use `/sbb start [topic]` to start a new conversation, or `/sbb start-thread [topic]` to start in an existing thread
+3. Use `/sbb start [topic]` to start a new conversation
+   * In a channel: Starts a new conversation
+   * In a thread: Starts in the current thread and compiles previous discussion
 
 4. The bot will automatically detect the task type and select appropriate AI models
 
@@ -232,8 +234,9 @@ All commands use the `/sbb` prefix. Once the bot is running, you can use these s
 
 ### Conversation Management
 
-* `/sbb start [topic]` - Start a new conversation (creates a new thread)
-* `/sbb start-thread [topic]` - Start a conversation in the current thread (compiles previous discussion)
+* `/sbb start [topic]` - Start a new conversation
+  * **In a channel**: Starts a new conversation (creates a new thread)
+  * **In a thread**: Starts a conversation in the current thread and compiles previous discussion
 * `/sbb continue` - Continue a paused conversation
 
 ### Model Management

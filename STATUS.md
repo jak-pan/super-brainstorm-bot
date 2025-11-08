@@ -139,7 +139,7 @@ This document tracks the implementation progress of the Super Brainstorm Bot sys
 
 * ✅ **Task 2.4: Command Handling Framework**
   * Slash command system implemented with `/sbb` prefix
-  * All commands working: `/sbb start`, `/sbb start-thread`, `/sbb continue`, `/sbb stop`, `/sbb select-models`, `/sbb add-model`, `/sbb remove-model`, `/sbb list-models`, `/sbb fetch-models`, `/sbb image`, `/sbb settings`
+  * All commands working: `/sbb start` (works in channels and threads), `/sbb continue`, `/sbb stop`, `/sbb select-models`, `/sbb add-model`, `/sbb remove-model`, `/sbb list-models`, `/sbb fetch-models`, `/sbb image`, `/sbb settings`
   * Thread support for starting conversations in existing Discord threads
   * Error handling for unknown commands
 

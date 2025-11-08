@@ -1310,7 +1310,7 @@ flowchart TD
 
 * **Thread Conversations**: Conversations can run in any Discord thread within the configured server
 * **Automatic Thread Detection**: Bot automatically detects when messages are in threads
-* **Thread Compilation**: When starting a conversation in a thread with `/start-thread`, the bot:
+* **Thread Compilation**: When starting a conversation in a thread with `/sbb start`, the bot:
   * Fetches all previous messages from the thread
   * Compiles them using Scribe and TLDR bots
   * Creates a conversation context from the compiled discussion
@@ -1351,9 +1351,11 @@ All commands use the `/sbb` prefix. The bot also processes regular messages in c
 
 #### Conversation Management
 
-* `/sbb start [topic]` - Start a new conversation (creates a new thread)
-* `/sbb start-thread [topic]` - Start a conversation in the current thread
-  * Compiles previous discussion using Scribe and TLDR
+* `/sbb start [topic]` - Start a new conversation
+  * **In a channel**: Starts a new conversation (creates a new thread)
+  * **In a thread**: Starts a conversation in the current thread and compiles previous discussion
+  * Automatically detects if you're in a channel or thread
+  * Compiles previous discussion when used in a thread (using Scribe and TLDR)
   * Automatically detects task type and selects appropriate models
   * Sets $22 cost limit for conversations and $2 for images by default (configurable in `default-settings.json`)
 * `/sbb continue` - Continue a paused conversation
