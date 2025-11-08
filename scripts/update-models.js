@@ -15,7 +15,7 @@ const __dirname = dirname(__filename);
 
 const MODELS_FILE = join(__dirname, "../src/config/models.json");
 const FALLBACK_MODELS_FILE = join(__dirname, "fallback-models.json");
-const PRICING_FILE = join(__dirname, "pricing.json");
+const PRICING_FILE = join(__dirname, "fallback-pricing.json");
 
 // Load fallback models and pricing from JSON files
 let fallbackModels = null;
@@ -38,7 +38,7 @@ function loadPricingData() {
     try {
       pricingData = JSON.parse(readFileSync(PRICING_FILE, "utf-8"));
     } catch (error) {
-      console.error("❌ Failed to load pricing.json:", error);
+      console.error("❌ Failed to load fallback-pricing.json:", error);
       process.exit(1);
     }
   }
@@ -136,7 +136,7 @@ async function fetchOpenAIModels(apiKey) {
 }
 
 /**
- * Get OpenAI pricing - loaded from pricing.json
+ * Get OpenAI pricing - loaded from fallback-pricing.json
  * Prices are per 1k tokens (converted from per 1M tokens)
  */
 function getOpenAIPricing(modelId) {
@@ -330,8 +330,10 @@ function parseAnthropicPricingFromHTML(html) {
     ];
 
     // TODO: Implement actual HTML parsing logic here
-    // For now, return null to use pricing.json
-    console.warn("⚠️  HTML parsing not fully implemented, using pricing.json");
+    // For now, return null to use fallback-pricing.json
+    console.warn(
+      "⚠️  HTML parsing not fully implemented, using fallback-pricing.json"
+    );
     return null;
   } catch (error) {
     console.warn(`⚠️  Error parsing pricing HTML: ${error.message}`);
@@ -346,13 +348,13 @@ async function updateAnthropicPricing() {
   try {
     const html = await scrapeAnthropicPricingHTML();
     if (!html) {
-      console.log("ℹ️  Using pricing.json for Anthropic pricing");
+      console.log("ℹ️  Using fallback-pricing.json for Anthropic pricing");
       return;
     }
 
     const scrapedPricing = parseAnthropicPricingFromHTML(html);
     if (scrapedPricing) {
-      // Update pricing.json with scraped data
+      // Update fallback-pricing.json with scraped data
       const pricing = loadPricingData();
       pricing.anthropic = { ...pricing.anthropic, ...scrapedPricing };
       writeFileSync(
@@ -368,7 +370,7 @@ async function updateAnthropicPricing() {
 }
 
 /**
- * Get Anthropic pricing - loaded from pricing.json (or scraped if available)
+ * Get Anthropic pricing - loaded from fallback-pricing.json (or scraped if available)
  * Prices are per 1k tokens (converted from per 1M tokens)
  */
 function getAnthropicPricing(modelId) {
@@ -463,7 +465,7 @@ async function fetchGrokModels(apiKey) {
 }
 
 /**
- * Get Grok pricing - loaded from pricing.json
+ * Get Grok pricing - loaded from fallback-pricing.json
  */
 function getGrokPricing(modelId) {
   const pricing = loadPricingData().grok;
@@ -543,7 +545,7 @@ function getContextWindow(provider, modelId) {
 /**
  * Determine if a model is the "smartest" for its provider
  */
-function isSmartestModel(provider, modelId, allModelIds) {
+function isSmartestModel(provider, modelId) {
   const id = modelId.toLowerCase();
 
   if (provider === "openai") {
