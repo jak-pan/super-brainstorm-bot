@@ -286,6 +286,21 @@ export class NotionService {
   }
 
   /**
+   * Get TLDR content for a conversation
+   * Public method to retrieve compiled TLDR from Notion
+   */
+  async getTLDRForConversation(conversation: ConversationState): Promise<string> {
+    try {
+      const topicName = conversation.topic || conversation.id;
+      const entryId = await this.findOrCreateDatabaseEntry(topicName, conversation);
+      return await this.getExistingTLDR(entryId);
+    } catch (error) {
+      logger.error("Failed to get TLDR for conversation:", error);
+      return "";
+    }
+  }
+
+  /**
    * Get existing TLDR content from database entry
    */
   private async getExistingTLDR(entryId: string): Promise<string> {

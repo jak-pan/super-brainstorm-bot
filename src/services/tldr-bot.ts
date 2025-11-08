@@ -46,6 +46,14 @@ export class TLDRBot {
     }
   }
 
+  /**
+   * Get compiled TLDR content for a conversation from Notion
+   * Used to provide compiled context to the Session Planner
+   */
+  async getCompiledTLDR(conversation: ConversationState): Promise<string> {
+    return await this.notionService.getTLDRForConversation(conversation);
+  }
+
   private async updateTLDR(conversation: ConversationState): Promise<void> {
     // Use conversation's tldr model or default to Claude Opus 4.1
     const tldrModel = conversation.tldrModel || "anthropic/claude-opus-4.1";

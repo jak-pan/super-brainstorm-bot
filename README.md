@@ -105,8 +105,9 @@ npm run dev
 ### Starting a Conversation
 
 Use `/sbb start` to begin a new conversation. The command automatically detects if you're in a channel or thread:
-- **In a channel**: Starts a new conversation (creates a new thread)
-- **In a thread**: Starts a conversation in the current thread and compiles previous discussion
+
+* **In a channel**: Starts a new conversation (creates a new thread)
+* **In a thread**: Starts a conversation in the current thread and compiles previous discussion
 
 The bot will automatically detect the task type and select appropriate AI models.
 

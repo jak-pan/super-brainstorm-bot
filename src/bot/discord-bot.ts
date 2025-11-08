@@ -234,7 +234,7 @@ export class DiscordBot {
 
     try {
       const isInThread = interaction.channel?.isThread();
-      
+
       if (isInThread) {
         // Handle thread context - compile previous discussion
         await this.handleStartInThread(interaction);
@@ -393,32 +393,65 @@ export class DiscordBot {
         await this.scribeBot.notifyNewMessages(conversation);
       }
 
-      // Trigger TLDR to summarize
+      // Wait for Scribe to complete (it's async, but we wait a bit)
+      await new Promise((resolve) => setTimeout(resolve, 3000));
+
+      // Trigger TLDR to summarize from Scribe's detailed documentation
       if (conversation) {
         await this.tldrBot.checkAndUpdate(conversation);
       }
 
-      // Wait a bit for compilation
-      await new Promise((resolve) => setTimeout(resolve, 2000));
+      // Wait for TLDR to complete
+      await new Promise((resolve) => setTimeout(resolve, 5000));
 
-      // Automatically approve and start since user explicitly started in thread
-      if (conversation?.status === "planning") {
-        await this.sessionPlanner.approveAndStart(conversationId);
+      if (!conversation) {
+        await interaction.editReply({
+          content: "Error: Conversation not found after compilation.",
+        });
+        return;
       }
+
+      // Get compiled TLDR from Notion to use as input for planner
+      const compiledTLDR = await this.tldrBot.getCompiledTLDR(conversation);
+      
+      // Create a synthetic message with the compiled TLDR for the planner
+      // If TLDR is empty or not yet available, use topic with context about previous messages
+      const plannerInput = compiledTLDR && compiledTLDR.trim().length > 0
+        ? `Previous Discussion Summary:\n\n${compiledTLDR}\n\n---\n\nTopic: ${topic}`
+        : `Topic: ${topic}\n\nNote: This thread has ${previousMessages.length} previous messages that have been compiled. Please create a plan to continue this discussion.`;
+      
+      const plannerInputMessage: AppMessage = {
+        id: `thread-compiled-${Date.now()}`,
+        conversationId,
+        authorId: "system",
+        authorType: "user",
+        content: plannerInput,
+        replyTo: [],
+        timestamp: new Date(),
+      };
+
+      // Add the compiled message to conversation context
+      this.contextManager.addMessage(conversationId, plannerInputMessage);
+
+      // Now start the planner with the compiled TLDR as input
+      await this.sessionPlanner.handleInitialMessage(
+        conversationId,
+        plannerInputMessage
+      );
 
       const costLimit =
         conversation?.costLimit || this.config.costLimits.conversation;
       const imageCostLimit =
         conversation?.imageCostLimit || this.config.costLimits.image;
       await interaction.editReply({
-        content: `✅ Conversation started in thread!\n\n**Topic:** ${topic}\n**Task Type:** ${taskType}\n**Previous Messages:** ${previousMessages.length} compiled\n**Models:** ${preset.conversationModels.length} selected\n**Cost Limits:** Conversation: $${costLimit} | Images: $${imageCostLimit}\n\nPrevious discussion has been compiled. Models will now join the conversation.`,
+        content: `✅ Previous discussion compiled!\n\n**Topic:** ${topic}\n**Task Type:** ${taskType}\n**Previous Messages:** ${previousMessages.length} compiled\n**Models:** ${preset.conversationModels.length} selected\n**Cost Limits:** Conversation: $${costLimit} | Images: $${imageCostLimit}\n\nSession Planner is now analyzing the compiled discussion and will create a plan. Use \`/sbb start\` to approve once ready.`,
       });
     } else {
       // No previous messages, just start normally
       if (conversation?.status === "planning") {
         await this.sessionPlanner.approveAndStart(conversationId);
       }
-      
+
       const costLimit =
         conversation?.costLimit || this.config.costLimits.conversation;
       const imageCostLimit =
@@ -585,11 +618,15 @@ export class DiscordBot {
           .addSubcommand((subcommand) =>
             subcommand
               .setName("start")
-              .setDescription("Start a new conversation (in channel) or in current thread (compiles previous discussion)")
+              .setDescription(
+                "Start a new conversation (in channel) or in current thread (compiles previous discussion)"
+              )
               .addStringOption((option) =>
                 option
                   .setName("topic")
-                  .setDescription("Topic for the conversation (optional in threads - uses thread name)")
+                  .setDescription(
+                    "Topic for the conversation (optional in threads - uses thread name)"
+                  )
                   .setRequired(false)
               )
           )
@@ -1177,7 +1214,6 @@ export class DiscordBot {
       });
     }
   }
-
 
   /**
    * Handle /continue command - Continue paused conversation
