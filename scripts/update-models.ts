@@ -211,7 +211,9 @@ async function fetchAnthropicModels(apiKey?: string) {
 
   try {
     console.log("📡 Fetching models from Anthropic API...");
-    // Anthropic SDK doesn't have models.list() - use fetch() instead
+    // Anthropic SDK is available (https://docs.claude.com/en/api/client-sdks)
+    // but doesn't expose models.list() method directly
+    // Use fetch() for the models endpoint
     // Reference: https://docs.claude.com/en/api/models-list
     const response = await fetch("https://api.anthropic.com/v1/models", {
       method: "GET",
@@ -420,7 +422,9 @@ function getAnthropicPricing(modelId: string): {
 
 /**
  * Fetch available models from Grok API
- * Grok uses OpenAI-compatible API, so we can use OpenAI SDK
+ * Grok (xAI) uses OpenAI-compatible API, so we use OpenAI SDK
+ * Alternative: @ai-sdk/xai SDK is available (https://ai-sdk.dev/providers/ai-sdk-providers/xai)
+ * but OpenAI SDK works well for model listing since Grok is OpenAI-compatible
  */
 async function fetchGrokModels(apiKey?: string) {
   if (!apiKey) {
@@ -436,7 +440,8 @@ async function fetchGrokModels(apiKey?: string) {
 
   try {
     console.log("📡 Fetching models from Grok API...");
-    // Grok uses OpenAI-compatible API
+    // Grok (xAI) uses OpenAI-compatible API
+    // Reference: https://ai-sdk.dev/providers/ai-sdk-providers/xai
     const grok = new OpenAI({
       apiKey,
       baseURL: "https://api.x.ai/v1",
