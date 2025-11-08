@@ -224,7 +224,7 @@ This document tracks the implementation progress of the Super Brainstorm Bot sys
 
 * ✅ **Task 4.6: Approval Mechanism**
   * `approveAndStart` method implemented
-  * Listens for `!start` or `!approve` commands
+  * Listens for `/sbb start` slash command
   * Handles timeout (30 minutes default)
   * Creates conversation on approval
   * Transitions to active state

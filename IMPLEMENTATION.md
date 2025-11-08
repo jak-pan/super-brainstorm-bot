@@ -291,7 +291,7 @@ export class DiscordBot {
 2. Implement command registry pattern
 3. Add command validation
 4. Create base command handler interface
-5. Implement basic commands (!status, !help)
+5. Implement basic slash commands (/sbb start, /sbb settings)
 
 **Acceptance Criteria**:
 
@@ -544,7 +544,7 @@ function assessParameters(topic, analysis) {
 **Steps**:
 
 1. Implement approval waiting logic
-2. Listen for `!start` or `!approve` commands
+2. Listen for `/sbb start` slash command
 3. Handle timeout (30 minutes default)
 4. Create conversation on approval
 5. Transition to active state

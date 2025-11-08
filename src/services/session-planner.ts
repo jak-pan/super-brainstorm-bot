@@ -135,7 +135,7 @@ export class SessionPlanner {
           .map((q, i) => `${i + 1}. ${q}`)
           .join("\n");
         await this.messageCallback(
-          `**Session Planner** 🤔\n\nI'd like to clarify a few things before we start:\n\n${questionsText}\n\nPlease reply with your answers, or type \`!start\` to proceed with defaults.`,
+          `**Session Planner** 🤔\n\nI'd like to clarify a few things before we start:\n\n${questionsText}\n\nPlease reply with your answers, or use \`/sbb start\` to proceed with defaults.`,
           initialMessage.discordMessageId
         );
       } else if (this.messageCallback) {
@@ -534,7 +534,7 @@ export class SessionPlanner {
 
     if (this.messageCallback) {
       await this.messageCallback(
-        `**Session Plan** 📋\n\nUsing default parameters. Type \`!start\` to begin.`
+        `**Session Plan** 📋\n\nUsing default parameters. Use \`/sbb start\` to begin.`
       );
     }
   }

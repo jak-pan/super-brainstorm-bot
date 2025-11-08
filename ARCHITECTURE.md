@@ -270,7 +270,7 @@ sequenceDiagram
     Planner->>Bot: Post plan for approval
     Bot->>Discord: Post plan summary
     
-    User->>Discord: Approves plan (!start or !approve)
+    User->>Discord: Approves plan (/sbb start)
     Discord->>Bot: Approval command
     Bot->>Planner: Approval received
     Planner->>Context: Create conversation with parameters
@@ -460,7 +460,7 @@ flowchart TD
     ExpandMessage --> FormatPlan[Format Plan with Expanded Topic, Parameters, Expected Duration, Key Areas to Explore]
     
     FormatPlan --> PostPlan[Post Plan Summary for Approval]
-    PostPlan --> WaitApproval[Wait for Approval Command: !start or !approve]
+    PostPlan --> WaitApproval[Wait for Approval Command: /sbb start]
     
     WaitApproval --> CheckApproval{Approval Received?}
     CheckApproval -->|No| CheckTimeout2{Timeout Reached?}
@@ -504,7 +504,7 @@ flowchart TD
   * Key areas to explore
   * Expected conversation flow
   * Estimated duration and resource usage
-* **Approval Mechanism**: Waits for explicit user approval via `!start` or `!approve` commands
+* **Approval Mechanism**: Waits for explicit user approval via `/sbb start` slash command
 * **Timeout Handling**: Cancels planning if no response within timeout period (default: 30 minutes)
 
 ## Session Moderator Workflow (Ongoing Moderation)
@@ -689,11 +689,7 @@ graph TD
 
 ```mermaid
 flowchart TD
-    DiscordMsg[Discord Message] --> IsCommand{Is Command? Starts with !}
-    IsCommand -->|Yes| HandleCommand[Handle Command!continue, !stop, etc.]
-    IsCommand -->|No| CheckConversation{Conversation Exists?}
-    
-    HandleCommand --> End[End]
+    DiscordMsg[Discord Message] --> CheckConversation{Conversation Exists?}
     
     CheckConversation -->|No| PlanningPhase[Session Planner Phase]
     CheckConversation -->|Yes| GetConversation[Get Conversation]
@@ -1249,21 +1245,17 @@ flowchart TD
 
 ```mermaid
 flowchart TD
-    Start[Discord Command Starts with !] --> Parse[Parse Command& Arguments]
+    CmdStart[Discord Slash Command /sbb] --> Parse[Parse Command & Arguments]
     Parse --> GetConversation[Get Active Conversation]
     GetConversation --> CheckCommand{Command Type?}
     
-    CheckCommand -->|!start| Start[Approve Plan &Start Conversation]
-    CheckCommand -->|!approve| Start
-    CheckCommand -->|!continue| Continue[Resume Conversation Set Status: active]
-    CheckCommand -->|!stop| Stop[Stop Conversation Set Status: stopped]
-    CheckCommand -->|!pause| Pause[Pause Conversation Set Status: paused]
-    CheckCommand -->|!status| Status[Get Conversation Status & Stats]
-    CheckCommand -->|!refresh| Refresh[Force Context Refresh from Notion]
-    CheckCommand -->|!explore| Explore[Create New Subtopic Branch]
+    CheckCommand -->|start| StartCmd[Approve Plan &Start Conversation]
+    CheckCommand -->|continue| Continue[Resume Conversation Set Status: active]
+    CheckCommand -->|stop| Stop[Stop Conversation Set Status: stopped]
+    CheckCommand -->|settings| Settings[View/Modify Settings]
     CheckCommand -->|Unknown| Unknown[Reply: Unknown Command]
     
-    Start --> CheckPlanning{Status isplanning?}
+    StartCmd --> CheckPlanning{Status isplanning?}
     CheckPlanning -->|Yes| ApprovePlan[Approve Plan Start Conversation]
     CheckPlanning -->|No| ReplyNotPlanning[Reply: No planto approve]
     ApprovePlan --> CreateConv[Create Conversationwith Parameters]
@@ -1272,23 +1264,14 @@ flowchart TD
     
     Continue --> ReplyContinue[Reply: Conversation Resumed]
     Stop --> ReplyStop[Reply: Conversation Stopped]
-    Pause --> ReplyPause[Reply: Conversation Paused]
-    Status --> FormatStatus[Format Status Message]
-    FormatStatus --> ReplyStatus[Reply with Status Info]
-    Refresh --> RefreshContext[Refresh Contextfrom Notion]
-    RefreshContext --> ReplyRefresh[Reply: Context Refreshed]
-    Explore --> CreateBranch[Create New Conversation Branch]
-    CreateBranch --> ReplyExplore[Reply: Exploring New Topic]
+    Settings --> ShowSettings[Display Settings]
+    Unknown --> End[End]
     
     ReplyStarted --> End[End]
     ReplyNotPlanning --> End
     ReplyContinue --> End[End]
     ReplyStop --> End
-    ReplyPause --> End
-    ReplyStatus --> End
-    ReplyRefresh --> End
-    ReplyExplore --> End
-    Unknown --> End
+    ShowSettings --> End
     
     style CheckCommand fill:#fff4e1
     style Continue fill:#e8f5e9
