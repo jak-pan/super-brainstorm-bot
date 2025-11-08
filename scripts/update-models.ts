@@ -9,7 +9,6 @@ import { readFileSync, writeFileSync } from "fs";
 import { join, dirname } from "path";
 import { fileURLToPath } from "url";
 import OpenAI from "openai";
-import Anthropic from "@anthropic-ai/sdk";
 import { URL } from "url";
 import https from "https";
 
@@ -41,9 +40,7 @@ let contextWindows: {
 function loadFallbackModels() {
   if (!fallbackModels) {
     try {
-      fallbackModels = JSON.parse(
-        readFileSync(FALLBACK_MODELS_FILE, "utf-8")
-      );
+      fallbackModels = JSON.parse(readFileSync(FALLBACK_MODELS_FILE, "utf-8"));
     } catch (error) {
       console.error("❌ Failed to load fallback-models.json:", error);
       process.exit(1);
@@ -146,13 +143,23 @@ async function fetchOpenAIModels(apiKey?: string) {
     console.log(
       "⚠️  No models from API, using known current models as fallback"
     );
-    return loadFallbackModels().openai;
+    const fallback = loadFallbackModels();
+    if (!fallback) {
+      throw new Error("Failed to load fallback models");
+    }
+    return fallback.openai;
   } catch (error) {
     console.warn(
-      `⚠️  Could not fetch OpenAI models: ${error instanceof Error ? error.message : String(error)}`
+      `⚠️  Could not fetch OpenAI models: ${
+        error instanceof Error ? error.message : String(error)
+      }`
     );
     console.warn("   Using known current models as fallback");
-    return loadFallbackModels().openai;
+    const fallback = loadFallbackModels();
+    if (!fallback) {
+      throw new Error("Failed to load fallback models");
+    }
+    return fallback.openai;
   }
 }
 
@@ -187,10 +194,29 @@ async function fetchAnthropicModels(apiKey?: string) {
 
   try {
     console.log("📡 Fetching models from Anthropic API...");
-    const anthropic = new Anthropic({ apiKey });
+    // Anthropic SDK doesn't have models.list() - use fetch() instead
+    // Reference: https://docs.claude.com/en/api/models-list
+    const response = await fetch("https://api.anthropic.com/v1/models", {
+      method: "GET",
+      headers: {
+        "x-api-key": apiKey,
+        "anthropic-version": "2023-06-01",
+      },
+    });
 
-    const response = await anthropic.models.list();
-    const models = response.data || [];
+    if (!response.ok) {
+      throw new Error(`HTTP ${response.status}`);
+    }
+
+    const data = (await response.json()) as {
+      data?: Array<{
+        id: string;
+        display_name?: string;
+        type?: string;
+        created_at?: string;
+      }>;
+    };
+    const models = data.data || [];
 
     const claudeModels = models
       .filter((m) => m.type === "model" && m.id && m.id.startsWith("claude-"))
@@ -210,7 +236,9 @@ async function fetchAnthropicModels(apiKey?: string) {
     return fallback.anthropic;
   } catch (error) {
     console.warn(
-      `⚠️  Could not fetch Anthropic models: ${error instanceof Error ? error.message : String(error)}`
+      `⚠️  Could not fetch Anthropic models: ${
+        error instanceof Error ? error.message : String(error)
+      }`
     );
     console.warn("   Using known models as fallback");
     const fallback = loadFallbackModels();
@@ -286,10 +314,9 @@ async function scrapeAnthropicPricingHTML(
  * Parse pricing from Anthropic pricing page HTML
  * This is a basic implementation - may need refinement based on actual page structure
  */
-function parseAnthropicPricingFromHTML(html: string | null): Record<
-  string,
-  { input: number; output: number }
-> | null {
+function parseAnthropicPricingFromHTML(
+  html: string | null
+): Record<string, { input: number; output: number }> | null {
   if (!html) return null;
 
   try {
@@ -301,7 +328,9 @@ function parseAnthropicPricingFromHTML(html: string | null): Record<
     return null;
   } catch (error) {
     console.warn(
-      `⚠️  Error parsing pricing HTML: ${error instanceof Error ? error.message : String(error)}`
+      `⚠️  Error parsing pricing HTML: ${
+        error instanceof Error ? error.message : String(error)
+      }`
     );
     return null;
   }
@@ -322,13 +351,15 @@ async function updateAnthropicPricing(): Promise<void> {
     if (scrapedPricing) {
       // Update fallback-pricing.json with scraped data
       const pricing = loadPricingData();
-      pricing.anthropic = { ...pricing.anthropic, ...scrapedPricing };
-      writeFileSync(
-        PRICING_FILE,
-        JSON.stringify(pricing, null, 2) + "\n",
-        "utf-8"
-      );
-      console.log("✅ Updated Anthropic pricing from scraped data");
+      if (pricing && pricing.anthropic) {
+        pricing.anthropic = { ...pricing.anthropic, ...scrapedPricing };
+        writeFileSync(
+          PRICING_FILE,
+          JSON.stringify(pricing, null, 2) + "\n",
+          "utf-8"
+        );
+        console.log("✅ Updated Anthropic pricing from scraped data");
+      }
     } else {
       console.log(
         "ℹ️  Using fallback-pricing.json for Anthropic pricing (scraping not fully implemented)"
@@ -349,10 +380,11 @@ function getAnthropicPricing(modelId: string): {
   output: number;
 } {
   const id = modelId.toLowerCase();
-  const pricing = loadPricingData().anthropic;
+  const pricingData = loadPricingData();
+  const pricing = pricingData.anthropic;
 
   // Try exact match
-  if (pricing[id]) {
+  if (pricing && pricing[id]) {
     return pricing[id];
   }
 
@@ -400,7 +432,9 @@ async function fetchGrokModels(apiKey?: string) {
     return fallback.grok;
   } catch (error) {
     console.warn(
-      `⚠️  Could not fetch Grok models: ${error instanceof Error ? error.message : String(error)}`
+      `⚠️  Could not fetch Grok models: ${
+        error instanceof Error ? error.message : String(error)
+      }`
     );
     const fallback = loadFallbackModels();
     return fallback.grok;
@@ -412,8 +446,9 @@ async function fetchGrokModels(apiKey?: string) {
  * Uses highest price as fallback if model not found
  */
 function getGrokPricing(modelId: string): { input: number; output: number } {
-  const pricing = loadPricingData().grok;
-  if (pricing[modelId]) {
+  const pricingData = loadPricingData();
+  const pricing = pricingData.grok;
+  if (pricing && pricing[modelId]) {
     return pricing[modelId];
   }
   // Use highest price as fallback
@@ -738,4 +773,3 @@ if (import.meta.url === `file://${process.argv[1]}`) {
 }
 
 export { updateModels };
-
