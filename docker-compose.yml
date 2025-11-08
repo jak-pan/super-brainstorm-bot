@@ -1,0 +1,42 @@
+version: '3.8'
+
+services:
+  superbrainstormbot:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: superbrainstormbot
+    restart: unless-stopped
+    env_file:
+      - .env
+    environment:
+      # Override any env vars here if needed
+      - NODE_ENV=production
+      # Enable health check server for Docker health checks
+      - ENABLE_HEALTH_CHECK=true
+      - HEALTH_CHECK_PORT=3000
+    # Uncomment if you need to expose a port for health checks
+    # ports:
+    #   - "3000:3000"
+    healthcheck:
+      test: ["CMD", "node", "-e", "const http=require('http');const req=http.get('http://localhost:3000/health',(r)=>{process.exit(r.statusCode===200?0:1)});req.on('error',()=>process.exit(1));req.setTimeout(5000,()=>{req.destroy();process.exit(1)});"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 40s
+    # Resource limits (adjust as needed)
+    deploy:
+      resources:
+        limits:
+          cpus: '1.0'
+          memory: 1G
+        reservations:
+          cpus: '0.5'
+          memory: 512M
+    # Logging configuration
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "10m"
+        max-file: "3"
+
