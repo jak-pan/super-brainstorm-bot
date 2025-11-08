@@ -20,11 +20,6 @@ describe('AdapterRegistry', () => {
         model: 'grok-beta',
         baseUrl: 'https://api.x.ai/v1',
       },
-      cursor: {
-        apiKey: undefined,
-        model: undefined,
-        baseUrl: undefined,
-      },
     } as Config;
   });
 

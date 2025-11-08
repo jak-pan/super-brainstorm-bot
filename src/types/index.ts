@@ -89,11 +89,6 @@ export interface Config {
     model: string;
     baseUrl: string;
   };
-  cursor: {
-    apiKey?: string;
-    model?: string;
-    baseUrl?: string;
-  };
   notion: {
     apiKey: string;
     reasoningPageId: string;

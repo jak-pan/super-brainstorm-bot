@@ -3,7 +3,6 @@ import type { AIAdapter } from '../types/index.js';
 import { OpenAIAdapter } from './openai-adapter.js';
 import { AnthropicAdapter } from './anthropic-adapter.js';
 import { GrokAdapter } from './grok-adapter.js';
-import { CursorAdapter } from './cursor-adapter.js';
 import { logger } from '../utils/logger.js';
 
 export class AdapterRegistry {
@@ -42,21 +41,6 @@ export class AdapterRegistry {
         logger.info('Grok adapter registered');
       } catch (error) {
         logger.error('Failed to register Grok adapter:', error);
-      }
-    }
-
-    // Cursor (optional)
-    if (config.cursor.apiKey && config.cursor.model && config.cursor.baseUrl) {
-      try {
-        const cursorAdapter = new CursorAdapter(
-          config.cursor.apiKey,
-          config.cursor.model,
-          config.cursor.baseUrl
-        );
-        this.adapters.set('cursor', cursorAdapter);
-        logger.info('Cursor adapter registered');
-      } catch (error) {
-        logger.warn('Failed to register Cursor adapter (may not be available):', error);
       }
     }
   }

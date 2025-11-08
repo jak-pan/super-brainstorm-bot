@@ -41,11 +41,6 @@ export function loadConfig(): Config {
       model: process.env.GROK_MODEL || "grok-beta",
       baseUrl: process.env.GROK_BASE_URL || "https://api.x.ai/v1",
     },
-    cursor: {
-      apiKey: process.env.CURSOR_API_KEY,
-      model: process.env.CURSOR_MODEL,
-      baseUrl: process.env.CURSOR_BASE_URL,
-    },
     notion: {
       apiKey: process.env.NOTION_API_KEY!,
       reasoningPageId: process.env.NOTION_REASONING_PAGE_ID!,
