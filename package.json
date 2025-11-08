@@ -12,8 +12,9 @@
     "lint:mermaid": "node scripts/lint-mermaid.js",
     "lint:scripts": "eslint scripts --ext .ts,.js",
     "lint:all": "npm run lint && npm run lint:mermaid && npm run lint:scripts",
+    "check:docs": "node scripts/check-docs.js",
     "type-check": "tsc --noEmit",
-    "precommit": "npm run lint:all",
+    "precommit": "npm run lint:all && npm run check:docs",
     "prepare": "husky || true"
   },
   "keywords": [
