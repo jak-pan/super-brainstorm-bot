@@ -29,7 +29,6 @@ superbrainstormbot/
 │   │   ├── openai-adapter.ts        # OpenAI implementation
 │   │   ├── anthropic-adapter.ts     # Anthropic implementation
 │   │   ├── grok-adapter.ts          # Grok implementation
-│   │   ├── cursor-adapter.ts        # Cursor implementation (optional)
 │   │   └── index.ts                 # Adapter registry
 │   ├── bot/
 │   │   └── discord-bot.ts          # Discord bot core

@@ -2,7 +2,7 @@
 
 ## Overview
 
-The Super Brainstorm Bot is a Discord-based multi-AI collaboration system that enables multiple AI models (Claude, ChatGPT, Grok, and optionally Cursor) to engage in collaborative brainstorming sessions with human participants. The system includes intelligent conversation management, context compression, and automatic documentation in Notion.
+The Super Brainstorm Bot is a Discord-based multi-AI collaboration system that enables multiple AI models (Claude, ChatGPT, and Grok) to engage in collaborative brainstorming sessions with human participants. The system includes intelligent conversation management, context compression, and automatic documentation in Notion.
 
 ## Core Components
 
@@ -23,7 +23,6 @@ The Super Brainstorm Bot is a Discord-based multi-AI collaboration system that e
   * OpenAI (ChatGPT)
   * Anthropic (Claude)
   * Grok (X/Twitter API)
-  * Cursor (if API available)
 * **Responsibilities**:
   * Standardize API calls across providers
   * Handle rate limiting
@@ -137,7 +136,6 @@ graph TB
     AIAdapter -->|Claude| ClaudeAPI[Anthropic API]
     AIAdapter -->|ChatGPT| OpenAIAPI[OpenAI API]
     AIAdapter -->|Grok| GrokAPI[Grok API]
-    AIAdapter -->|Cursor| CursorAPI[Cursor API]
     
     ConvCoord -->|Send Response| BotCore
     SessionPlanner -->|Moderation Messages| BotCore
@@ -295,17 +293,9 @@ classDiagram
         +checkContextWindow()
     }
     
-    class CursorAdapter {
-        -apiKey: string
-        -model: string
-        +generateResponse()
-        +checkContextWindow()
-    }
-    
     AIAdapter <|.. OpenAIAdapter
     AIAdapter <|.. AnthropicAdapter
     AIAdapter <|.. GrokAdapter
-    AIAdapter <|.. CursorAdapter
 ```
 
 ## Context Management Flow
@@ -879,10 +869,6 @@ ANTHROPIC_MODEL=claude-3-opus-20240229
 GROK_API_KEY=
 GROK_MODEL=grok-beta
 
-# Cursor (optional)
-CURSOR_API_KEY=
-CURSOR_MODEL=
-
 # Notion
 NOTION_API_KEY=
 NOTION_REASONING_PAGE_ID=
@@ -949,13 +935,6 @@ MODERATOR_QUALITY_ASSESSMENT=true # Assess conversation quality before stopping
 * **Context Window**: Verify with API docs
 * **Note**: May require X/Twitter API access or separate xAI API access
 
-### Cursor API
-
-* **Endpoint**: TBD (research required)
-* **Model**: TBD
-* **Context Window**: TBD
-* **Note**: Cursor may not have a public API. If unavailable, this adapter can be skipped or implemented as a placeholder for future support
-
 ### Notion API
 
 * **Endpoint**: `https://api.notion.com/v1`
@@ -987,8 +966,7 @@ MODERATOR_QUALITY_ASSESSMENT=true # Assess conversation quality before stopping
 2. Implement OpenAI adapter
 3. Implement Anthropic adapter
 4. Implement Grok adapter
-5. Research and implement Cursor adapter (if available)
-6. Add adapter factory/registry
+5. Add adapter factory/registry
 
 ### Phase 4: Session Planner Bot (Session Moderator)
 

@@ -1,6 +1,6 @@
 # Super Brainstorm Bot
 
-A Discord bot that enables collaborative brainstorming sessions with multiple AI models (Claude, ChatGPT, Grok, and optionally Cursor) working together. The bot automatically documents conversations in Notion with compressed reasoning and TLDR summaries.
+A Discord bot that enables collaborative brainstorming sessions with multiple AI models (Claude, ChatGPT, and Grok) working together. The bot automatically documents conversations in Notion with compressed reasoning and TLDR summaries.
 
 ## Features
 
@@ -153,7 +153,6 @@ superbrainstormbot/
 │   │   ├── openai-adapter.ts
 │   │   ├── anthropic-adapter.ts
 │   │   ├── grok-adapter.ts
-│   │   ├── cursor-adapter.ts
 │   │   └── index.ts
 │   ├── bot/               # Discord bot implementation
 │   │   └── discord-bot.ts

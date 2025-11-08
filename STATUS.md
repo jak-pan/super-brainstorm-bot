@@ -168,10 +168,6 @@ This document tracks the implementation progress of the Super Brainstorm Bot sys
   * Circuit breaker protection
   * JSDoc documentation added
 
-* ✅ **Task 3.5: Cursor Adapter (Optional)**
-  * `src/adapters/cursor-adapter.ts` implemented (placeholder)
-  * Clearly documented as not yet available
-  * Structure ready for future implementation
 
 * ✅ **Task 3.6: Adapter Registry**
   * `src/adapters/index.ts` implemented
@@ -521,7 +517,6 @@ This document tracks the implementation progress of the Super Brainstorm Bot sys
   * OpenAI adapter (with retry & circuit breaker)
   * Anthropic adapter (with retry & circuit breaker)
   * Grok adapter (with retry & circuit breaker)
-  * Cursor adapter (placeholder)
 
 * ✅ **Error Handling & Resilience**
   * Retry logic with exponential backoff
