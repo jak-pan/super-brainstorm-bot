@@ -9,6 +9,7 @@ import { readFileSync, writeFileSync } from "fs";
 import { join, dirname } from "path";
 import { fileURLToPath } from "url";
 import OpenAI from "openai";
+import Anthropic from "@anthropic-ai/sdk";
 import { URL } from "url";
 import https from "https";
 
@@ -211,44 +212,67 @@ async function fetchAnthropicModels(apiKey?: string) {
 
   try {
     console.log("📡 Fetching models from Anthropic API...");
-    // Anthropic SDK is available (https://docs.claude.com/en/api/client-sdks)
-    // but doesn't expose models.list() method directly
-    // Use fetch() for the models endpoint
+    // Use Anthropic SDK (https://docs.claude.com/en/api/client-sdks)
     // Reference: https://docs.claude.com/en/api/models-list
-    const response = await fetch("https://api.anthropic.com/v1/models", {
-      method: "GET",
-      headers: {
-        "x-api-key": apiKey,
-        "anthropic-version": "2023-06-01",
-      },
-    });
+    const anthropic = new Anthropic({ apiKey });
+    
+    // Try using SDK's models.list() method if available
+    try {
+      const response = await anthropic.models.list();
+      const models = response.data || [];
 
-    if (!response.ok) {
-      throw new Error(`HTTP ${response.status}`);
+      const claudeModels = models
+        .filter((m) => m.type === "model" && m.id && m.id.startsWith("claude-"))
+        .map((m) => ({
+          id: m.id,
+          name: m.display_name || m.id,
+          created_at: m.created_at,
+        }));
+
+      if (claudeModels.length > 0) {
+        console.log(`✅ Found ${claudeModels.length} Anthropic models`);
+        return claudeModels;
+      }
+    } catch (sdkError) {
+      // Fallback to fetch() if SDK method doesn't exist or fails
+      console.warn("⚠️  SDK models.list() not available, using fetch() fallback");
+      const response = await fetch("https://api.anthropic.com/v1/models", {
+        method: "GET",
+        headers: {
+          "x-api-key": apiKey,
+          "anthropic-version": "2023-06-01",
+        },
+      });
+
+      if (!response.ok) {
+        throw new Error(`HTTP ${response.status}`);
+      }
+
+      const data = (await response.json()) as {
+        data?: Array<{
+          id: string;
+          display_name?: string;
+          type?: string;
+          created_at?: string;
+        }>;
+      };
+      const models = data.data || [];
+
+      const claudeModels = models
+        .filter((m) => m.type === "model" && m.id && m.id.startsWith("claude-"))
+        .map((m) => ({
+          id: m.id,
+          name: m.display_name || m.id,
+          created_at: m.created_at,
+        }));
+
+      if (claudeModels.length > 0) {
+        console.log(`✅ Found ${claudeModels.length} Anthropic models`);
+        return claudeModels;
+      }
     }
 
-    const data = (await response.json()) as {
-      data?: Array<{
-        id: string;
-        display_name?: string;
-        type?: string;
-        created_at?: string;
-      }>;
-    };
-    const models = data.data || [];
-
-    const claudeModels = models
-      .filter((m) => m.type === "model" && m.id && m.id.startsWith("claude-"))
-      .map((m) => ({
-        id: m.id,
-        name: m.display_name || m.id,
-        created_at: m.created_at,
-      }));
-
-    if (claudeModels.length > 0) {
-      console.log(`✅ Found ${claudeModels.length} Anthropic models`);
-      return claudeModels;
-    }
+    console.warn("⚠️  No models from API, using known models as fallback");
 
     console.warn("⚠️  No models from API, using known models as fallback");
     const fallback = loadFallbackModels();
