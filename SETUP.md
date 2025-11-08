@@ -186,16 +186,20 @@ npm start
 2. Go to your Discord server and channel
 
 3. Use `/sbb start [topic]` to start a new conversation
-   * **In a channel**: Starts planning immediately
+   * **In a channel**: Starts planning immediately using promise-based approach
    * **In a thread**:
      * Fetches all previous messages (adds to context)
      * Starts planning immediately with first message
+     * **If questions are asked**: Conversation stays in planning mode, respond via messages or `/sbb edit`
+     * **After questions answered or if no questions**: Plan is created automatically
      * When you approve (use `/sbb start`), previous messages are compiled (Scribe + TLDR)
      * Then conversation starts with all bots active
 
 4. The bot will automatically detect the task type and select appropriate AI models
 
-5. The Session Planner bot will respond with clarifying questions or a plan
+5. The Session Planner bot will respond with clarifying questions or a plan:
+   * **If questions are asked**: Respond to them, and the plan will be created automatically
+   * **If no questions**: Plan is created immediately and conversation auto-starts (or waits for approval with `/sbb plan`)
 
 ## Troubleshooting
 

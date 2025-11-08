@@ -106,11 +106,13 @@ npm run dev
 
 Use `/sbb start` to begin a new conversation. The command automatically detects if you're in a channel or thread:
 
-* **In a channel**: Starts planning immediately
+* **In a channel**: Starts planning immediately using promise-based approach
 * **In a thread**:
   * Fetches all previous messages from the thread (adds them to context)
   * Starts planning immediately with the first message
-  * Session Planner analyzes and creates a plan
+  * Session Planner analyzes using promise-based approach (no timeout/polling)
+  * **If questions are asked**: Conversation stays in planning mode, respond via messages or `/sbb edit`
+  * **After questions answered or if no questions**: Plan is created automatically
   * When you approve the plan (use `/sbb start`), previous messages are compiled using Scribe (detailed documentation) and TLDR (summary)
   * Then the conversation starts with all bots active
 
@@ -123,14 +125,19 @@ All commands use the `/sbb` prefix:
 #### Conversation Management
 
 * `/sbb start [topic]` - Start conversation (auto-starts if no plan exists, approves if plan exists)
-  * **If no plan exists**: Creates plan and auto-starts conversation
+  * **If no plan exists**: Creates plan using promise-based approach
+    * **If questions are asked**: Stays in planning mode, waits for your response, then creates plan
+    * **If no questions**: Creates plan immediately and auto-starts conversation
   * **If plan exists**: Approves plan and starts conversation (compiles previous discussion if in thread)
   * **Topic**: Required if not in thread, optional in threads (uses thread name)
 * `/sbb plan [topic]` - Start planning mode (creates plan and waits for approval)
-  * Creates a plan and waits for you to approve with `/sbb start`
+  * Creates a plan using promise-based approach (no timeout/polling)
+  * If questions are asked, waits for your response before creating plan
+  * Waits for you to approve with `/sbb start`
   * Topic optional in threads (uses thread name)
 * `/sbb edit [message]` - Edit the planning message while in planning mode
   * Updates the plan based on your changes
+  * If plan is created after edit, waits for `/sbb start` approval
 * `/sbb continue` - Continue a paused conversation
 
 #### Model Management
@@ -165,12 +172,18 @@ All commands use the `/sbb` prefix:
 ### How It Works
 
 1. **User starts conversation** with `/sbb start` in a channel or thread
-2. **Planning starts immediately** - Planner analyzes the first message and creates a conversation plan
+2. **Planning starts immediately** - Planner analyzes the first message using promise-based approach
 3. **Thread messages** (if in thread): Previous messages are added to context but not compiled yet
 4. **Task type detection** - Bot automatically detects task type (general/coding/architecture) and selects appropriate models
-5. **User approval** - User approves the plan by calling `/sbb start` (or uses `/sbb edit` to modify the plan, or uses `/sbb plan` for explicit planning mode)
-6. **Thread compilation** (on approval, if in thread): Previous messages are compiled by Scribe (detailed) and TLDR (summary)
-7. **Conversation starts** - All bots become active and the conversation begins
+5. **Clarification flow**:
+   * **If questions are asked**: Conversation stays in planning mode, user responds via messages or `/sbb edit`
+   * **After user responds**: Plan is created automatically, conversation waits for `/sbb start` approval
+   * **If no questions**: Plan is created immediately
+6. **Auto-start or approval**:
+   * **With `/sbb start`**: If plan exists, auto-starts conversation (compiles thread messages if needed)
+   * **With `/sbb plan`**: Creates plan and waits for `/sbb start` approval
+7. **Thread compilation** (on approval, if in thread): Previous messages are compiled by Scribe (detailed) and TLDR (summary)
+8. **Conversation starts** - All bots become active and the conversation begins
 8. **AI models respond** - Multiple AIs generate responses based on the conversation context
 9. **AIs interact** - AIs can respond to each other, building on previous responses
 10. **Scribe bot documents** - The conversation is automatically documented in detail and stored in Notion (async, non-blocking)

@@ -1314,12 +1314,15 @@ flowchart TD
 * **Thread Conversations**: Conversations can run in any Discord thread within the configured server
 * **Automatic Thread Detection**: Bot automatically detects when messages are in threads
 * **Thread Compilation**: When starting a conversation in a thread:
-  * **`/sbb start`** (if no plan): Fetches all previous messages and adds them to context, creates plan and auto-starts
+  * **`/sbb start`** (if no plan): Fetches all previous messages and adds them to context, creates plan using promise-based approach
+    * **If questions are asked**: Stays in planning mode, waits for response, then creates plan
+    * **If no questions**: Auto-starts conversation immediately
   * **`/sbb start`** (if plan exists): Compiles previous messages with Scribe (detailed documentation) and TLDR (summary), then starts
-  * **`/sbb plan`**: Fetches all previous messages and adds them to context, creates plan and waits for approval
+  * **`/sbb plan`**: Fetches all previous messages and adds them to context, creates plan using promise-based approach and waits for approval
   * Uses immediate processing methods (`processMessagesImmediate` and `updateImmediate`) that bypass debouncing/throttling
   * Compilation happens before conversation becomes active, ensuring all bots have compiled context
   * **`/sbb edit`**: Allows editing the planning message while in planning mode, which re-triggers planning
+  * **Promise-based planning**: No timeout/polling - uses promises that resolve when plan is created or questions are asked
 * **Thread Tracking**: Thread information is stored in conversation state (`threadId`, `isThread`)
 * **New Topics**: For new topics, manager starts a fresh thread automatically
 
@@ -1357,11 +1360,15 @@ All commands use the `/sbb` prefix. The bot also processes regular messages in c
 #### Conversation Management
 
 * `/sbb start [topic]` - Start conversation (auto-starts if no plan exists, approves if plan exists)
-  * **If no plan exists**: Creates plan and auto-starts conversation
+  * **If no plan exists**: Creates plan using promise-based approach (no timeout/polling)
     * **In a channel**: Topic is required
     * **In a thread**: Topic is optional (uses thread name)
     * Automatically detects task type and selects appropriate models
     * Sets $22 cost limit for conversations and $2 for images by default (configurable in `default-settings.json`)
+    * **If questions are asked**: Conversation stays in planning mode, waits for user response
+    * **After questions answered or if no questions**: Plan is created automatically
+    * **If no questions**: Auto-starts conversation immediately
+    * **If questions were asked**: Waits for `/sbb start` approval after plan is created
   * **If plan exists**: Approves plan and starts conversation
     * Compiles previous discussion if in thread (Scribe + TLDR)
     * Processes previous messages immediately with Scribe (detailed documentation) and TLDR (summary)
@@ -1371,7 +1378,9 @@ All commands use the `/sbb` prefix. The bot also processes regular messages in c
   * **In a channel**: Starts planning with the topic
   * **In a thread**: Fetches previous messages (adds to context), starts planning with first message
   * Topic optional in threads (uses thread name)
-  * Creates a plan and waits for approval with `/sbb start`
+  * Creates a plan using promise-based approach (no timeout/polling)
+  * **If questions are asked**: Waits for user response, then creates plan
+  * Always waits for approval with `/sbb start` (never auto-starts)
 * `/sbb edit [message]` - Edit the planning message while in planning mode
   * Updates the plan based on your changes
   * Re-triggers planning with the edited message
