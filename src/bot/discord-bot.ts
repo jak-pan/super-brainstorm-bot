@@ -356,7 +356,7 @@ export class DiscordBot {
       );
 
       // If questions were asked, short-circuit to planning mode
-      if (planningResult.type === 'questions') {
+      if (planningResult.type === "questions") {
         await interaction.editReply({
           content: `✅ Planning started. Session Planner has asked clarifying questions. Please respond, then use \`/sbb start\` to begin the conversation.`,
         });
@@ -364,7 +364,7 @@ export class DiscordBot {
       }
 
       // Plan was created, auto-start
-      if (planningResult.type === 'plan') {
+      if (planningResult.type === "plan") {
         // Compile previous messages if in thread before starting
         if (isInThread && thread && conversation.messages.length > 1) {
           await interaction.editReply({
@@ -585,7 +585,7 @@ export class DiscordBot {
       );
 
       // If plan was created, inform user
-      if (planningResponse?.type === 'plan') {
+      if (planningResponse?.type === "plan") {
         await interaction.editReply({
           content: `✅ Planning message updated. Plan has been created. Use \`/sbb start\` to begin the conversation.`,
         });

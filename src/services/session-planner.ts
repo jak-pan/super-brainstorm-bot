@@ -219,18 +219,18 @@ export class SessionPlanner {
   private async createPlan(
     conversationId: string,
     _contextMessage: Message
-  ): Promise<{ plan: string; expandedTopic: string; parameters: any }> {
+  ): Promise<{ plan: string; expandedTopic: string; parameters: { maxMessages: number; costLimit: number; timeoutMinutes: number; maxContextWindowPercent: number } }> {
     const adapter = this.adapterRegistry.getAdapter(this.defaultModel);
     if (!adapter) {
       logger.error(`Session planner adapter ${this.defaultModel} not found`);
       // Fallback: use default plan
       await this.createDefaultPlan(conversationId);
       const conversation = this.contextManager.getConversation(conversationId);
-      if (conversation?.planningState?.plan) {
+      if (conversation?.planningState?.plan && conversation.planningState.parameters) {
         return {
           plan: conversation.planningState.plan,
           expandedTopic: conversation.planningState.expandedTopic || conversation.topic,
-          parameters: conversation.planningState.parameters || {},
+          parameters: conversation.planningState.parameters,
         };
       }
       throw new Error("Failed to create default plan");
@@ -277,11 +277,11 @@ export class SessionPlanner {
       // Fallback: use default parameters
       await this.createDefaultPlan(conversationId);
       const conversation = this.contextManager.getConversation(conversationId);
-      if (conversation?.planningState?.plan) {
+      if (conversation?.planningState?.plan && conversation.planningState.parameters) {
         return {
           plan: conversation.planningState.plan,
           expandedTopic: conversation.planningState.expandedTopic || conversation.topic,
-          parameters: conversation.planningState.parameters || {},
+          parameters: conversation.planningState.parameters,
         };
       }
       throw error;
