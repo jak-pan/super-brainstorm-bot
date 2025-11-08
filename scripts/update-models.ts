@@ -215,7 +215,7 @@ async function fetchAnthropicModels(apiKey?: string) {
     // Use Anthropic SDK (https://docs.claude.com/en/api/client-sdks)
     // Reference: https://docs.claude.com/en/api/models-list
     const anthropic = new Anthropic({ apiKey });
-    
+
     // Try using SDK's models.list() method if available
     try {
       const response = await anthropic.models.list();
@@ -235,7 +235,9 @@ async function fetchAnthropicModels(apiKey?: string) {
       }
     } catch (sdkError) {
       // Fallback to fetch() if SDK method doesn't exist or fails
-      console.warn("⚠️  SDK models.list() not available, using fetch() fallback");
+      console.warn(
+        "⚠️  SDK models.list() not available, using fetch() fallback"
+      );
       const response = await fetch("https://api.anthropic.com/v1/models", {
         method: "GET",
         headers: {
@@ -271,8 +273,6 @@ async function fetchAnthropicModels(apiKey?: string) {
         return claudeModels;
       }
     }
-
-    console.warn("⚠️  No models from API, using known models as fallback");
 
     console.warn("⚠️  No models from API, using known models as fallback");
     const fallback = loadFallbackModels();
