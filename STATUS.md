@@ -168,7 +168,6 @@ This document tracks the implementation progress of the Super Brainstorm Bot sys
   * Circuit breaker protection
   * JSDoc documentation added
 
-
 * ✅ **Task 3.6: Adapter Registry**
   * `src/adapters/index.ts` implemented
   * Adapter factory/registry working

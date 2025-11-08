@@ -1301,7 +1301,6 @@ export class NotionService {
 * \[ ] OpenAI adapter
 * \[ ] Anthropic adapter
 * \[ ] Grok adapter
-* \[ ] Cursor adapter (optional)
 * \[ ] Adapter registry
 
 **Phase 4: Session Planner (Planning)** (19-25 hours)
