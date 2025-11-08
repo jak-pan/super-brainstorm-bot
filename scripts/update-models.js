@@ -224,21 +224,40 @@ async function fetchAnthropicModels(apiKey) {
  * Since pricing is not available via API, we scrape from https://www.anthropic.com/pricing
  * Returns raw HTML string for parsing
  */
-async function scrapeAnthropicPricingHTML() {
+async function scrapeAnthropicPricingHTML(url = "https://www.anthropic.com/pricing", maxRedirects = 5) {
+  if (maxRedirects <= 0) {
+    throw new Error("Too many redirects");
+  }
+
   try {
-    console.log("📡 Attempting to scrape Anthropic pricing page...");
     return new Promise((resolve, reject) => {
-      const url = new URL("https://www.anthropic.com/pricing");
+      const urlObj = new URL(url);
       const options = {
-        hostname: url.hostname,
-        path: url.pathname,
+        hostname: urlObj.hostname,
+        path: urlObj.pathname + urlObj.search,
         method: "GET",
         headers: {
           "User-Agent": "Mozilla/5.0 (compatible; ModelUpdater/1.0)",
+          "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8",
         },
       };
 
       const req = https.request(options, (res) => {
+        // Handle redirects
+        if (res.statusCode >= 300 && res.statusCode < 400) {
+          const location = res.headers.location;
+          if (location) {
+            // Resolve relative URLs
+            const redirectUrl = location.startsWith("http") 
+              ? location 
+              : `${urlObj.protocol}//${urlObj.hostname}${location}`;
+            // Follow redirect recursively
+            return scrapeAnthropicPricingHTML(redirectUrl, maxRedirects - 1)
+              .then(resolve)
+              .catch(reject);
+          }
+        }
+
         let data = "";
         res.on("data", (chunk) => {
           data += chunk;
@@ -260,8 +279,7 @@ async function scrapeAnthropicPricingHTML() {
       req.end();
     });
   } catch (error) {
-    console.warn(`⚠️  Could not scrape Anthropic pricing: ${error.message}`);
-    return null;
+    throw error;
   }
 }
 
