@@ -134,7 +134,7 @@ graph TB
     ConvCoord -->|Notify New Messages| SessionPlanner
     
     AIAdapter -->|Claude| ClaudeAPI[Anthropic API]
-    AIAdapter -->|ChatGPT| OpenAIAPI[OpenAI API]
+    AIAdapter -->|ChatGPT| OpenAIAPI[Open AI API]
     AIAdapter -->|Grok| GrokAPI[Grok API]
     
     ConvCoord -->|Send Response| BotCore
@@ -267,27 +267,27 @@ sequenceDiagram
 classDiagram
     class AIAdapter {
         <<interface>>
-        +generateResponse(context, messages) Response
+        +generate Response(context, messages) Response
         +checkContextWindow() int
         +getModelName() string
     }
     
     class OpenAIAdapter {
-        -apiKey: string
+        -api Key: string
         -model: string
         +generateResponse()
         +checkContextWindow()
     }
     
     class AnthropicAdapter {
-        -apiKey: string
+        -api Key: string
         -model: string
         +generateResponse()
         +checkContextWindow()
     }
     
     class GrokAdapter {
-        -apiKey: string
+        -api Key: string
         -model: string
         +generateResponse()
         +checkContextWindow()
@@ -302,22 +302,22 @@ classDiagram
 
 ```mermaid
 flowchart TD
-    Start[New Message/Response] --> CheckContext{Context WindowUsage}
-    CheckContext -->|> 50%| FetchNotion[Fetch Compressed Contextfrom Notion]
+    Start[New Message/Response] --> CheckContext{Context Window Usage}
+    CheckContext -->|> 50%| FetchNotion[Fetch Compressed Context from Notion]
     CheckContext -->|<= 50%| UseCurrent[Use Current Context]
     
-    FetchNotion --> MergeContext[Merge Notion Contextwith Recent Messages]
-    UseCurrent --> AddMessage[Add New Messageto Context]
+    FetchNotion --> MergeContext[Merge Notion Context with Recent Messages]
+    UseCurrent --> AddMessage[Add New Message to Context]
     MergeContext --> AddMessage
     
-    AddMessage --> CheckLimit{ConversationLimit Reached?}
-    CheckLimit -->|Yes| StopConversation[Stop ConversationNotify Users]
+    AddMessage --> CheckLimit{Conversation Limit Reached?}
+    CheckLimit -->|Yes| StopConversation[Stop Conversation Notify Users]
     CheckLimit -->|No| Continue[Continue Conversation]
     
-    Continue --> TriggerScribe[Trigger Scribe Update(Async, Non-blocking)]
+    Continue --> TriggerScribe["Trigger Scribe Update (Async, Non-blocking)"]
     TriggerScribe --> Compress[Compress Conversation]
     Compress --> UpdateNotion[Update Notion Document]
-    UpdateNotion --> ContinueConversation[Continue Conversation(Scribe doesn't block)]
+    UpdateNotion --> ContinueConversation["Continue Conversation (Scribe doesn't block)"]
     
     style CheckContext fill:#fff4e1
     style CheckLimit fill:#ffebee
@@ -328,27 +328,27 @@ flowchart TD
 
 ```mermaid
 flowchart TD
-    Start[New Message Received] --> CheckQueue{Update QueueExists?}
-    CheckQueue -->|Yes| ClearTimeout[Clear ExistingTimeout]
-    CheckQueue -->|No| SetTimeout[Set DebounceTimeout]
+    Start[New Message Received] --> CheckQueue{Update Queue Exists?}
+    CheckQueue -->|Yes| ClearTimeout[Clear Existing Timeout]
+    CheckQueue -->|No| SetTimeout[Set Debounce Timeout]
     ClearTimeout --> SetTimeout
     
-    SetTimeout --> Wait[Wait for UpdateInterval]
-    Wait --> Collect[Collect All Messagesfrom Conversation]
-    Collect --> Format[Format Conversationfor Compression]
-    Format --> GetAdapter{Get ScribeAI Adapter}
+    SetTimeout --> Wait[Wait for Update Interval]
+    Wait --> Collect[Collect All Messages from Conversation]
+    Collect --> Format[Format Conversation for Compression]
+    Format --> GetAdapter{Get Scribe AI Adapter}
     
-    GetAdapter -->|Found| Compress[Compress Conversationvia AI]
-    GetAdapter -->|Not Found| LogError[Log ErrorSkip Update]
+    GetAdapter -->|Found| Compress[Compress Conversation via AI]
+    GetAdapter -->|Not Found| LogError[Log Error Skip Update]
     
-    Compress --> CheckSuccess{CompressionSuccessful?}
-    CheckSuccess -->|Yes| UpdateNotion[Update NotionReasoning Document]
-    CheckSuccess -->|No| Fallback[Create FallbackSummary]
+    Compress --> CheckSuccess{Compression Successful?}
+    CheckSuccess -->|Yes| UpdateNotion[Update Notion Reasoning Document]
+    CheckSuccess -->|No| Fallback[Create Fallback Summary]
     
     Fallback --> UpdateNotion
-    UpdateNotion --> CheckNotionSuccess{NotionUpdate Success?}
-    CheckNotionSuccess -->|Yes| Complete[Update CompleteClear Queue]
-    CheckNotionSuccess -->|No| LogNotionError[Log ErrorRetry Later]
+    UpdateNotion --> CheckNotionSuccess{Notion Update Success?}
+    CheckNotionSuccess -->|Yes| Complete[Update Complete Clear Queue]
+    CheckNotionSuccess -->|No| LogNotionError[Log Error Retry Later]
     
     LogError --> End[End]
     LogNotionError --> End
@@ -375,45 +375,45 @@ flowchart TD
 
 ```mermaid
 flowchart TD
-    Start[New Initial Message] --> Analyze[Analyze Messagevia AI]
-    Analyze --> IdentifyGaps[Identify AreasNeeding Clarification]
+    Start[New Initial Message] --> Analyze[Analyze Message via AI]
+    Analyze --> IdentifyGaps[Identify Areas Needing Clarification]
     
-    IdentifyGaps --> HasGaps{ClarificationNeeded?}
-    HasGaps -->|Yes| GenerateQuestions[Generate ClarifyingQuestions via AI]
-    HasGaps -->|No| AssessParams[Assess ConversationParameters]
+    IdentifyGaps --> HasGaps{Clarification Needed?}
+    HasGaps -->|Yes| GenerateQuestions[Generate Clarifying Questions via AI]
+    HasGaps -->|No| AssessParams[Assess Conversation Parameters]
     
-    GenerateQuestions --> PostQuestions[Post Questionsin Thread Reply]
-    PostQuestions --> SetStatusPlanning[Set ConversationStatus: planning]
-    SetStatusPlanning --> WaitResponse[Wait for UserResponse in Thread]
+    GenerateQuestions --> PostQuestions[Post Questions in Thread Reply]
+    PostQuestions --> SetStatusPlanning[Set Conversation Status: planning]
+    SetStatusPlanning --> WaitResponse[Wait for User Response in Thread]
     
-    WaitResponse --> CheckResponse{UserResponded?}
-    CheckResponse -->|No| CheckTimeout{TimeoutReached?}
-    CheckTimeout -->|Yes| CancelPlanning[Cancel PlanningNotify User]
+    WaitResponse --> CheckResponse{User Responded?}
+    CheckResponse -->|No| CheckTimeout{Timeout Reached?}
+    CheckTimeout -->|Yes| CancelPlanning[Cancel Planning Notify User]
     CheckTimeout -->|No| WaitResponse
     
-    CheckResponse -->|Yes| ParseResponse[Parse UserResponse]
+    CheckResponse -->|Yes| ParseResponse[Parse User Response]
     ParseResponse --> AssessParams
     
-    AssessParams --> EstimateComplexity[Estimate ConversationComplexity]
-    EstimateComplexity --> CalculateParams[Calculate Parameters:- Max Messages- Max Tokens- Timeout- Context Window]
+    AssessParams --> EstimateComplexity[Estimate Conversation Complexity]
+    EstimateComplexity --> CalculateParams[Calculate Parameters: Max Messages, Max Tokens, Timeout, Context Window]
     
-    CalculateParams --> CreatePlan[Create Conversation Planvia AI]
-    CreatePlan --> ExpandMessage[Expand on OriginalMessage via AI]
-    ExpandMessage --> FormatPlan[Format Plan with:- Expanded Topic- Parameters- Expected Duration- Key Areas to Explore]
+    CalculateParams --> CreatePlan[Create Conversation Plan via AI]
+    CreatePlan --> ExpandMessage[Expand on Original Message via AI]
+    ExpandMessage --> FormatPlan[Format Plan with Expanded Topic, Parameters, Expected Duration, Key Areas to Explore]
     
-    FormatPlan --> PostPlan[Post Plan Summaryfor Approval]
-    PostPlan --> WaitApproval[Wait for ApprovalCommand: !start or !approve]
+    FormatPlan --> PostPlan[Post Plan Summary for Approval]
+    PostPlan --> WaitApproval[Wait for Approval Command: !start or !approve]
     
-    WaitApproval --> CheckApproval{ApprovalReceived?}
-    CheckApproval -->|No| CheckTimeout2{TimeoutReached?}
+    WaitApproval --> CheckApproval{Approval Received?}
+    CheckApproval -->|No| CheckTimeout2{Timeout Reached?}
     CheckTimeout2 -->|Yes| CancelPlanning
     CheckTimeout2 -->|No| WaitApproval
     
     CheckApproval -->|Yes| CreateConversation[Create Conversationwith Parameters]
     CreateConversation --> SetStatusActive[Set Status: active]
     SetStatusActive --> InitializeContext[Initialize Contextwith Expanded Message]
-    InitializeContext --> NotifyCoordinator[Notify ConversationCoordinator]
-    NotifyCoordinator --> Complete[Planning CompleteConversation Ready]
+    InitializeContext --> NotifyCoordinator[Notify Conversation Coordinator]
+    NotifyCoordinator --> Complete[Planning Complete Conversation Ready]
     
     CancelPlanning --> End[End]
     Complete --> End
@@ -453,39 +453,39 @@ flowchart TD
 
 ```mermaid
 flowchart TD
-    Start[New Message Posted] --> Monitor[Monitor MessageAI or Human]
-    Monitor --> AnalyzeContent[Analyze MessageContent & Context]
+    Start[New Message Posted] --> Monitor[Monitor Message AI or Human]
+    Monitor --> AnalyzeContent[Analyze Message Content & Context]
     
-    AnalyzeContent --> CheckTopicDrift{Detect TopicDrift?}
-    CheckTopicDrift -->|Yes| AssessDrift[Assess DriftSeverity]
-    CheckTopicDrift -->|No| CheckLimits[Check ConversationLimits]
+    AnalyzeContent --> CheckTopicDrift{Detect Topic Drift?}
+    CheckTopicDrift -->|Yes| AssessDrift[Assess Drift Severity]
+    CheckTopicDrift -->|No| CheckLimits[Check Conversation Limits]
     
-    AssessDrift --> DriftSevere{DriftSevere?}
-    DriftSevere -->|Yes| Redirect[Post Gentle RedirectMessage]
-    DriftSevere -->|No| TrackDrift[Track Minor DriftMonitor]
+    AssessDrift --> DriftSevere{Drift Severe?}
+    DriftSevere -->|Yes| Redirect[Post Gentle Redirect Message]
+    DriftSevere -->|No| TrackDrift[Track Minor Drift Monitor]
     
-    Redirect --> RemindPlan[Remind of OriginalPlan & Objectives]
-    RemindPlan --> PostRedirect[Post to DiscordThread Reply]
+    Redirect --> RemindPlan[Remind of Original Plan & Objectives]
+    RemindPlan --> PostRedirect[Post to Discord Thread Reply]
     PostRedirect --> CheckLimits
     
     TrackDrift --> CheckLimits
-    CheckLimits --> CheckTime{Time LimitReached?}
-    CheckTime -->|Yes| AssessQuality[Assess ConversationQuality & Outcomes]
-    CheckTime -->|No| CheckMessages{Message LimitReached?}
+    CheckLimits --> CheckTime{Time Limit Reached?}
+    CheckTime -->|Yes| AssessQuality[Assess Conversation Quality & Outcomes]
+    CheckTime -->|No| CheckMessages{Message Limit Reached?}
     
     CheckMessages -->|Yes| AssessQuality
-    CheckMessages -->|No| CheckTokens{Token LimitReached?}
+    CheckMessages -->|No| CheckTokens{Token Limit Reached?}
     
     CheckTokens -->|Yes| AssessQuality
-    CheckTokens -->|No| CheckProgress{GoalsAchieved?}
+    CheckTokens -->|No| CheckProgress{Goals Achieved?}
     
     CheckProgress -->|Yes| AssessQuality
     CheckProgress -->|No| Continue[Continue Monitoring]
     
-    AssessQuality --> GenerateSummary[Generate ConversationSummary]
-    GenerateSummary --> PostSummary[Post Summary toDiscord]
-    PostSummary --> StopConversation[Stop ConversationSet Status: completed]
-    StopConversation --> NotifyParticipants[Notify AllParticipants]
+    AssessQuality --> GenerateSummary[Generate Conversation Summary]
+    GenerateSummary --> PostSummary[Post Summary to Discord]
+    PostSummary --> StopConversation[Stop Conversation Set Status: completed]
+    StopConversation --> NotifyParticipants[Notify All Participants]
     NotifyParticipants --> End[End]
     
     Continue --> Monitor
@@ -536,28 +536,28 @@ flowchart TD
 
 ```mermaid
 flowchart TD
-    Start[Conversation Activity] --> CheckInterval{Time SinceLast Update?}
+    Start[Conversation Activity] --> CheckInterval{Time Since Last Update?}
     CheckInterval -->|>= Update Interval| Proceed[Proceed with Update]
-    CheckInterval -->|< Update Interval| Skip[Skip UpdateWait More]
+    CheckInterval -->|< Update Interval| Skip[Skip Update Wait More]
     
     Proceed --> GetAdapter{Get TLDRAI Adapter}
     GetAdapter -->|Found| GetScribeContent[Get Detailed Docsfrom Notion]
-    GetAdapter -->|Not Found| LogError[Log ErrorSkip Update]
+    GetAdapter -->|Not Found| LogError[Log Error Skip Update]
     
-    GetScribeContent --> CheckContent{Scribe ContentAvailable?}
-    CheckContent -->|No| SkipUpdate[Skip UpdateWait for Scribe]
+    GetScribeContent --> CheckContent{Scribe Content Available?}
+    CheckContent -->|No| SkipUpdate[Skip Update Wait for Scribe]
     CheckContent -->|Yes| Generate[Extract TLDRfrom Detailed Docs via AI]
     Generate --> ParseJSON{Parse JSONResponse?}
     
     ParseJSON -->|Success| Extract[Extract Summary& Key Findings]
-    ParseJSON -->|Failed| ParseText[Extract fromPlain Text]
+    ParseJSON -->|Failed| ParseText[Extract from Plain Text]
     
     ParseText --> Extract
-    Extract --> UpdateNotion[Update NotionTLDR Document]
+    Extract --> UpdateNotion[Update Notion TLDR Document]
     
-    UpdateNotion --> CheckSuccess{NotionUpdate Success?}
-    CheckSuccess -->|Yes| UpdateTimestamp[Update LastUpdate Timestamp]
-    CheckSuccess -->|No| LogNotionError[Log ErrorRetry Next Time]
+    UpdateNotion --> CheckSuccess{Notion Update Success?}
+    CheckSuccess -->|Yes| UpdateTimestamp[Update Last Update Timestamp]
+    CheckSuccess -->|No| LogNotionError[Log Error Retry Next Time]
     
     UpdateTimestamp --> Complete[Update Complete]
     LogError --> End[End]
@@ -631,70 +631,70 @@ graph TD
 
 ```mermaid
 flowchart TD
-    DiscordMsg[Discord Message] --> IsCommand{Is Command?Starts with !}
+    DiscordMsg[Discord Message] --> IsCommand{Is Command? Starts with !}
     IsCommand -->|Yes| HandleCommand[Handle Command!continue, !stop, etc.]
-    IsCommand -->|No| CheckConversation{ConversationExists?}
+    IsCommand -->|No| CheckConversation{Conversation Exists?}
     
     HandleCommand --> End[End]
     
-    CheckConversation -->|No| PlanningPhase[Session PlannerPhase]
+    CheckConversation -->|No| PlanningPhase[Session Planner Phase]
     CheckConversation -->|Yes| GetConversation[Get Conversation]
     
-    PlanningPhase --> AnalyzeMessage[Analyze InitialMessage]
-    AnalyzeMessage --> IdentifyGaps[Identify AreasNeeding Clarification]
-    IdentifyGaps --> GenerateQuestions[Generate ClarifyingQuestions via AI]
+    PlanningPhase --> AnalyzeMessage[Analyze Initial Message]
+    AnalyzeMessage --> IdentifyGaps[Identify Areas Needing Clarification]
+    IdentifyGaps --> GenerateQuestions[Generate Clarifying Questions via AI]
     GenerateQuestions --> PostQuestions[Post Questionsin Thread]
-    PostQuestions --> WaitResponse[Wait for UserResponse]
+    PostQuestions --> WaitResponse[Wait for User Response]
     
     WaitResponse --> CheckApproval{User Approvedor Answered?}
     CheckApproval -->|No| WaitResponse
-    CheckApproval -->|Yes| AssessParams[Assess ConversationParameters]
+    CheckApproval -->|Yes| AssessParams[Assess Conversation Parameters]
     
-    AssessParams --> CreatePlan[Create ConversationPlan & Expand Message]
-    CreatePlan --> PostPlan[Post Plan forApproval]
-    PostPlan --> WaitApproval[Wait for ApprovalCommand]
+    AssessParams --> CreatePlan[Create Conversation Plan & Expand Message]
+    CreatePlan --> PostPlan[Post Plan for Approval]
+    PostPlan --> WaitApproval[Wait for Approval Command]
     
-    WaitApproval --> CheckApprovalCmd{ApprovalReceived?}
+    WaitApproval --> CheckApprovalCmd{Approval Received?}
     CheckApprovalCmd -->|No| WaitApproval
     CheckApprovalCmd -->|Yes| CreateConv[Create Conversationwith Parameters]
     CreateConv --> SetActive[Set Status: active]
     SetActive --> GetConversation
     
-    GetConversation --> ConvertMsg[Convert to AppMessage Format]
-    ConvertMsg --> CheckStatus{ConversationStatus?}
+    GetConversation --> ConvertMsg[Convert to App Message Format]
+    ConvertMsg --> CheckStatus{Conversation Status?}
     
-    CheckStatus -->|active| CheckLimits[Check ConversationLimits]
+    CheckStatus -->|active| CheckLimits[Check Conversation Limits]
     CheckStatus -->|paused/stopped| Ignore[Ignore Message]
     CheckStatus -->|planning| PlanningPhase
     
-    CheckLimits --> LimitsOK{LimitsOK?}
-    LimitsOK -->|No| StopConv[Stop ConversationNotify User]
-    LimitsOK -->|Yes| CheckContext{Context WindowUsage?}
+    CheckLimits --> LimitsOK{Limits OK?}
+    LimitsOK -->|No| StopConv[Stop Conversation Notify User]
+    LimitsOK -->|Yes| CheckContext{Context Window Usage?}
     
     CheckContext -->|> Threshold| RefreshContext[Refresh Contextfrom Notion]
     CheckContext -->|OK| AddMessage[Add Messageto Context]
     
     RefreshContext --> AddMessage
-    AddMessage --> ShouldRespond{Should AIsRespond?}
+    AddMessage --> ShouldRespond{Should AIs Respond?}
     
     ShouldRespond -->|Yes| TriggerAI[Trigger AIResponses]
-    ShouldRespond -->|No| NotifyScribe[Notify Scribe BotAsync]
+    ShouldRespond -->|No| NotifyScribe[Notify Scribe Bot Async]
     
-    TriggerAI --> QueueResponses[Queue AI ResponsesParallel Processing]
+    TriggerAI --> QueueResponses[Queue AI Responses Parallel Processing]
     QueueResponses --> GenerateResponses[Generate Responsesvia Adapters]
     GenerateResponses --> PostResponses[Post to Discordvia Callback]
     
-    PostResponses --> NotifyModerator[Notify Session ModeratorMonitor Message]
+    PostResponses --> NotifyModerator[Notify Session Moderator Monitor Message]
     NotifyModerator --> CheckTopicDrift{Moderator:Topic Drift?}
     
-    CheckTopicDrift -->|Yes| PostRedirect[Moderator: PostRedirect Message]
+    CheckTopicDrift -->|Yes| PostRedirect[Moderator: Post Redirect Message]
     PostRedirect --> NotifyScribe
     CheckTopicDrift -->|No| CheckModeratorLimits{Moderator:Limits Reached?}
     
-    CheckModeratorLimits -->|Yes| StopByModerator[Moderator: StopConversation]
+    CheckModeratorLimits -->|Yes| StopByModerator[Moderator: Stop Conversation]
     CheckModeratorLimits -->|No| NotifyScribe
     
-    NotifyScribe --> NotifyTLDR[Notify TLDR BotAsync Check]
+    NotifyScribe --> NotifyTLDR[Notify TLDR Bot Async Check]
     NotifyTLDR --> End
     
     StopByModerator --> End
@@ -719,15 +719,15 @@ flowchart TD
 
 ```mermaid
 flowchart TD
-    Trigger[Trigger AI Response] --> GetMessages[Get ConversationMessages]
+    Trigger[Trigger AI Response] --> GetMessages[Get Conversation Messages]
     GetMessages --> GetRecent[Get Recent Messagesfor Batching]
-    GetRecent --> CalculateReplyTo[Calculate Reply-ToMessage IDs]
+    GetRecent --> CalculateReplyTo[Calculate Reply-To Message IDs]
     
-    CalculateReplyTo --> FilterTime[Filter by Time WindowBatch Window]
+    CalculateReplyTo --> FilterTime[Filter by Time Window Batch Window]
     FilterTime --> LimitRefs[Limit to Max 5References]
     
-    LimitRefs --> GetAdapters[Get AvailableAI Adapters]
-    GetAdapters --> LimitAdapters[Limit to MaxResponses Per Turn]
+    LimitRefs --> GetAdapters[Get Available AI Adapters]
+    GetAdapters --> LimitAdapters[Limit to Max Responses Per Turn]
     
     LimitAdapters --> BuildPrompt[Build System Promptwith Topic]
     BuildPrompt --> QueueParallel[Queue Responsesin Parallel Queue]
@@ -744,14 +744,14 @@ flowchart TD
     Generate2 --> CheckSuccess2{Success?}
     Generate3 --> CheckSuccess3{Success?}
     
-    CheckSuccess1 -->|Yes| CreateMsg1[Create MessageAdd to Context]
-    CheckSuccess1 -->|No| LogError1[Log ErrorSkip]
+    CheckSuccess1 -->|Yes| CreateMsg1[Create Message Add to Context]
+    CheckSuccess1 -->|No| LogError1[Log Error Skip]
     
-    CheckSuccess2 -->|Yes| CreateMsg2[Create MessageAdd to Context]
-    CheckSuccess2 -->|No| LogError2[Log ErrorSkip]
+    CheckSuccess2 -->|Yes| CreateMsg2[Create Message Add to Context]
+    CheckSuccess2 -->|No| LogError2[Log Error Skip]
     
-    CheckSuccess3 -->|Yes| CreateMsg3[Create MessageAdd to Context]
-    CheckSuccess3 -->|No| LogError3[Log ErrorSkip]
+    CheckSuccess3 -->|Yes| CreateMsg3[Create Message Add to Context]
+    CheckSuccess3 -->|No| LogError3[Log Error Skip]
     
     CreateMsg1 --> PostDiscord1[Post to Discordvia Callback]
     CreateMsg2 --> PostDiscord2[Post to Discordvia Callback]
@@ -782,7 +782,7 @@ flowchart TD
 ```typescript
 interface ConversationState {
   id: string;
-  channelId: string;
+  channel Id: string;
   topic: string;
   participants: string[]; // AI model names + user IDs
   messages: Message[];
@@ -797,7 +797,7 @@ interface ConversationState {
     plan?: string;
     expandedTopic?: string;
     parameters?: {
-      maxMessages: number;
+      max Messages: number;
       maxTokens: number;
       timeoutMinutes: number;
       maxContextWindowPercent: number;
@@ -805,7 +805,7 @@ interface ConversationState {
     awaitingApproval: boolean;
   };
   moderationState?: {
-    topicDriftCount: number;
+    topic DriftCount: number;
     lastTopicCheck: Date;
     originalObjectives: string[];
     currentFocus: string;
@@ -824,7 +824,7 @@ interface ConversationState {
 ```typescript
 interface Message {
   id: string;
-  conversationId: string;
+  conversation Id: string;
   authorId: string;
   authorType: 'user' | 'ai';
   content: string;
@@ -842,7 +842,7 @@ interface AIResponse {
   content: string;
   model: string;
   tokens: number;
-  replyTo: string[];
+  reply To: string[];
   contextUsed: number;
 }
 ```
@@ -1059,18 +1059,18 @@ flowchart TD
     Success -->|Yes| ReturnResponse[Return Response]
     
     Success -->|No| CheckRetries{Retries< Max?}
-    CheckRetries -->|Yes| WaitBackoff[Wait ExponentialBackoff]
+    CheckRetries -->|Yes| WaitBackoff[Wait Exponential Backoff]
     WaitBackoff --> Attempt
     
     CheckRetries -->|No| LogError[Log Error]
-    LogError --> CheckCircuit{Circuit BreakerActive?}
+    LogError --> CheckCircuit{Circuit Breaker Active?}
     
-    CheckCircuit -->|No| DisableAdapter[Disable AdapterTemporarily]
-    CheckCircuit -->|Yes| SkipAdapter[Skip AdapterContinue with Others]
+    CheckCircuit -->|No| DisableAdapter[Disable Adapter Temporarily]
+    CheckCircuit -->|Yes| SkipAdapter[Skip Adapter Continue with Others]
     
     DisableAdapter --> SkipAdapter
-    SkipAdapter --> ContinueOthers[Continue withOther Adapters]
-    ContinueOthers --> ReturnPartial[Return PartialResults]
+    SkipAdapter --> ContinueOthers[Continue with Other Adapters]
+    ContinueOthers --> ReturnPartial[Return Partial Results]
     
     ReturnResponse --> End[End]
     ReturnPartial --> End
@@ -1090,17 +1090,17 @@ flowchart TD
     Success -->|Yes| Complete[Update Complete]
     
     Success -->|No| CheckRetries{Retries< Max?}
-    CheckRetries -->|Yes| WaitBackoff[Wait ExponentialBackoff]
+    CheckRetries -->|Yes| WaitBackoff[Wait Exponential Backoff]
     WaitBackoff --> Attempt
     
     CheckRetries -->|No| QueueUpdate[Queue Updatefor Later]
     QueueUpdate --> LogError[Log Error]
-    LogError --> Fallback{Is CriticalUpdate?}
+    LogError --> Fallback{Is Critical Update?}
     
-    Fallback -->|Yes| LocalCache[Cache LocallyRetry Periodically]
-    Fallback -->|No| SkipUpdate[Skip UpdateContinue]
+    Fallback -->|Yes| LocalCache[Cache Locally Retry Periodically]
+    Fallback -->|No| SkipUpdate[Skip Update Continue]
     
-    LocalCache --> RetryLater[Retry LaterBackground Job]
+    LocalCache --> RetryLater[Retry Later Background Job]
     RetryLater --> Attempt
     
     Complete --> End[End]
@@ -1120,17 +1120,17 @@ flowchart TD
     
     Success -->|Yes| Complete[Message Posted]
     
-    Success -->|No| CheckRateLimit{RateLimited?}
-    CheckRateLimit -->|Yes| WaitRateLimit[Wait for RateLimit Reset]
+    Success -->|No| CheckRateLimit{Rate Limited?}
+    CheckRateLimit -->|Yes| WaitRateLimit[Wait for Rate Limit Reset]
     WaitRateLimit --> QueueMessage[Queue Message]
     
     CheckRateLimit -->|No| CheckRetries{Retries< Max?}
-    CheckRetries -->|Yes| WaitBackoff[Wait ExponentialBackoff]
+    CheckRetries -->|Yes| WaitBackoff[Wait Exponential Backoff]
     WaitBackoff --> Attempt
     
     CheckRetries -->|No| QueueMessage
     
-    QueueMessage --> ProcessQueue[Process QueueWhen Available]
+    QueueMessage --> ProcessQueue[Process Queue When Available]
     ProcessQueue --> Attempt
     
     Complete --> End[End]
@@ -1165,42 +1165,42 @@ flowchart TD
 
 ```mermaid
 flowchart TD
-    Start[Notion Operation] --> CheckType{OperationType?}
+    Start[Notion Operation] --> CheckType{Operation Type?}
     
-    CheckType -->|Update Reasoning| UpdateReasoning[Update DetailedReasoning Document]
+    CheckType -->|Update Reasoning| UpdateReasoning[Update Detailed Reasoning Document]
     CheckType -->|Update TLDR| UpdateTLDR[Update TLDRDocument]
-    CheckType -->|Get Context| GetContext[Get CompressedContext]
-    CheckType -->|Get Latest Reasoning| GetLatestReasoning[Get LatestReasoning Content]
+    CheckType -->|Get Context| GetContext[Get Compressed Context]
+    CheckType -->|Get Latest Reasoning| GetLatestReasoning[Get Latest Reasoning Content]
     
     UpdateReasoning --> FormatReasoning[Format Verbose Contentwith Metadata]
-    FormatReasoning --> AppendBlock1[Append Block toReasoning Page]
+    FormatReasoning --> AppendBlock1[Append Block to Reasoning Page]
     AppendBlock1 --> Success1{Success?}
     
     UpdateTLDR --> FormatTLDR[Format Summary& Key Findings]
-    FormatTLDR --> AppendBlock2[Append Block toTLDR Page]
+    FormatTLDR --> AppendBlock2[Append Block to TLDR Page]
     AppendBlock2 --> Success2{Success?}
     
-    GetContext --> ListBlocks[List Blocks fromReasoning Page]
-    ListBlocks --> FilterBlocks[Filter byConversation ID]
-    FilterBlocks --> ExtractContent[Extract LatestCompressed Content]
+    GetContext --> ListBlocks[List Blocks from Reasoning Page]
+    ListBlocks --> FilterBlocks[Filter by Conversation ID]
+    FilterBlocks --> ExtractContent[Extract Latest Compressed Content]
     ExtractContent --> Success3{Success?}
     
-    GetLatestReasoning --> ListBlocks2[List Blocks fromReasoning Page]
-    ListBlocks2 --> FilterByTopic[Filter byTopic/Conversation ID]
-    FilterByTopic --> ExtractReasoning[Extract LatestDetailed Documentation]
+    GetLatestReasoning --> ListBlocks2[List Blocks from Reasoning Page]
+    ListBlocks2 --> FilterByTopic[Filter by Topic/Conversation ID]
+    FilterByTopic --> ExtractReasoning[Extract Latest Detailed Documentation]
     ExtractReasoning --> Success4{Success?}
     
     Success1 -->|Yes| Complete1[Update Complete]
-    Success1 -->|No| Error1[Log ErrorThrow Exception]
+    Success1 -->|No| Error1[Log Error Throw Exception]
     
     Success2 -->|Yes| Complete2[Update Complete]
-    Success2 -->|No| Error2[Log ErrorThrow Exception]
+    Success2 -->|No| Error2[Log Error Throw Exception]
     
     Success3 -->|Yes| ReturnContext[Return Context]
-    Success3 -->|No| ReturnEmpty[Return EmptyString]
+    Success3 -->|No| ReturnEmpty[Return Empty String]
     
-    Success4 -->|Yes| ReturnReasoning[Return DetailedDocumentation]
-    Success4 -->|No| ReturnEmpty2[Return EmptyString]
+    Success4 -->|Yes| ReturnReasoning[Return Detailed Documentation]
+    Success4 -->|No| ReturnEmpty2[Return Empty String]
     
     Complete1 --> End[End]
     Complete2 --> End
@@ -1225,36 +1225,36 @@ flowchart TD
 
 ```mermaid
 flowchart TD
-    Start[Discord CommandStarts with !] --> Parse[Parse Command& Arguments]
-    Parse --> GetConversation[Get ActiveConversation]
-    GetConversation --> CheckCommand{CommandType?}
+    Start[Discord Command Starts with !] --> Parse[Parse Command& Arguments]
+    Parse --> GetConversation[Get Active Conversation]
+    GetConversation --> CheckCommand{Command Type?}
     
     CheckCommand -->|!start| Start[Approve Plan &Start Conversation]
     CheckCommand -->|!approve| Start
-    CheckCommand -->|!continue| Continue[Resume ConversationSet Status: active]
-    CheckCommand -->|!stop| Stop[Stop ConversationSet Status: stopped]
-    CheckCommand -->|!pause| Pause[Pause ConversationSet Status: paused]
-    CheckCommand -->|!status| Status[Get ConversationStatus & Stats]
-    CheckCommand -->|!refresh| Refresh[Force ContextRefresh from Notion]
-    CheckCommand -->|!explore| Explore[Create NewSubtopic Branch]
-    CheckCommand -->|Unknown| Unknown[Reply: UnknownCommand]
+    CheckCommand -->|!continue| Continue[Resume Conversation Set Status: active]
+    CheckCommand -->|!stop| Stop[Stop Conversation Set Status: stopped]
+    CheckCommand -->|!pause| Pause[Pause Conversation Set Status: paused]
+    CheckCommand -->|!status| Status[Get Conversation Status & Stats]
+    CheckCommand -->|!refresh| Refresh[Force Context Refresh from Notion]
+    CheckCommand -->|!explore| Explore[Create New Subtopic Branch]
+    CheckCommand -->|Unknown| Unknown[Reply: Unknown Command]
     
     Start --> CheckPlanning{Status isplanning?}
-    CheckPlanning -->|Yes| ApprovePlan[Approve PlanStart Conversation]
+    CheckPlanning -->|Yes| ApprovePlan[Approve Plan Start Conversation]
     CheckPlanning -->|No| ReplyNotPlanning[Reply: No planto approve]
     ApprovePlan --> CreateConv[Create Conversationwith Parameters]
     CreateConv --> SetActive[Set Status: active]
-    SetActive --> ReplyStarted[Reply: ConversationStarted]
+    SetActive --> ReplyStarted[Reply: Conversation Started]
     
-    Continue --> ReplyContinue[Reply: ConversationResumed]
-    Stop --> ReplyStop[Reply: ConversationStopped]
-    Pause --> ReplyPause[Reply: ConversationPaused]
-    Status --> FormatStatus[Format StatusMessage]
-    FormatStatus --> ReplyStatus[Reply withStatus Info]
+    Continue --> ReplyContinue[Reply: Conversation Resumed]
+    Stop --> ReplyStop[Reply: Conversation Stopped]
+    Pause --> ReplyPause[Reply: Conversation Paused]
+    Status --> FormatStatus[Format Status Message]
+    FormatStatus --> ReplyStatus[Reply with Status Info]
     Refresh --> RefreshContext[Refresh Contextfrom Notion]
-    RefreshContext --> ReplyRefresh[Reply: ContextRefreshed]
-    Explore --> CreateBranch[Create NewConversation Branch]
-    CreateBranch --> ReplyExplore[Reply: ExploringNew Topic]
+    RefreshContext --> ReplyRefresh[Reply: Context Refreshed]
+    Explore --> CreateBranch[Create New Conversation Branch]
+    CreateBranch --> ReplyExplore[Reply: Exploring New Topic]
     
     ReplyStarted --> End[End]
     ReplyNotPlanning --> End
@@ -1353,7 +1353,7 @@ All system prompts are stored in `src/prompts/` as separate `.txt` files for eas
 
 **Features**:
 
-* Variable replacement: Use `{variableName}` syntax for dynamic content
+* Variable replacement: Use `{variable Name}` syntax for dynamic content
 * Caching: Prompts are cached in memory for performance
 * Easy updates: Edit `.txt` files without code changes
 * Documentation: See `src/prompts/README.md` for details
