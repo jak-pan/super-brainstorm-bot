@@ -243,44 +243,23 @@ export class DiscordBot {
         (thread ? thread.name : undefined) ||
         "General Discussion";
 
-      // Check if conversation already exists and is in planning (approval case)
+      // Check if conversation already exists
       const lookupId = thread ? thread.id : channelId;
       const existingConversationId = this.activeConversations.get(lookupId);
       if (existingConversationId) {
-        const existingConversation = this.contextManager.getConversation(existingConversationId);
+        const existingConversation = this.contextManager.getConversation(
+          existingConversationId
+        );
         if (existingConversation) {
-          if (existingConversation.status === "planning") {
-            // This is an approval - compile previous messages if in thread, then start
-            if (isInThread && thread && existingConversation.messages.length > 1) {
-              await interaction.editReply({
-                content: `📝 Compiling previous discussion before starting...`,
-              });
-
-              try {
-                // Process Scribe first (TLDR depends on Scribe's output)
-                await this.scribeBot.processMessagesImmediate(existingConversation);
-                
-                // Then process TLDR (which uses Scribe's output)
-                await this.tldrBot.updateImmediate(existingConversation);
-
-                await interaction.editReply({
-                  content: `✅ Previous discussion compiled. Starting conversation...`,
-                });
-              } catch (error) {
-                logger.error("Error compiling previous discussion:", error);
-                // Continue anyway - compilation is not critical
-              }
-            }
-
-            // Approve and start
-            await this.sessionPlanner.approveAndStart(existingConversationId);
+          if (existingConversation.status === "active") {
             await interaction.editReply({
-              content: `✅ Conversation started! All participants can now engage.`,
+              content:
+                "A conversation is already active. Use `/sbb continue` to resume if paused.",
             });
             return;
-          } else if (existingConversation.status === "active") {
+          } else if (existingConversation.status === "planning") {
             await interaction.editReply({
-              content: "A conversation is already active. Use `/sbb continue` to resume if paused.",
+              content: "A conversation is already in planning phase. Use `/sbb go` to approve and start, or `/sbb edit` to modify the plan.",
             });
             return;
           }
@@ -361,12 +340,153 @@ export class DiscordBot {
 
       const location = isInThread ? "thread" : "channel";
       await interaction.editReply({
-        content: `✅ Conversation started in ${location}!\n\n**Topic:** ${topic}\n**Task Type:** ${taskType}\n${messageInfo}**Models:** ${preset.conversationModels.length} selected\n**Cost Limits:** Conversation: $${costLimit} | Images: $${imageCostLimit}\n\nSession Planner is analyzing and will create a plan. Use \`/sbb start\` to approve once ready.`,
+        content: `✅ Planning started in ${location}!\n\n**Topic:** ${topic}\n**Task Type:** ${taskType}\n${messageInfo}**Models:** ${preset.conversationModels.length} selected\n**Cost Limits:** Conversation: $${costLimit} | Images: $${imageCostLimit}\n\nSession Planner is analyzing and will create a plan. Use \`/sbb go\` to approve once ready, or \`/sbb edit\` to modify the plan.`,
       });
     } catch (error) {
       logger.error("Error starting conversation:", error);
       await interaction.editReply({
         content: `Failed to start conversation: ${
+          error instanceof Error ? error.message : "Unknown error"
+        }`,
+      });
+    }
+  }
+
+  /**
+   * Handle /sbb go command - Approve plan and start conversation
+   */
+  private async handleGoCommand(
+    interaction: ChatInputCommandInteraction
+  ): Promise<void> {
+    await interaction.deferReply({ ephemeral: false });
+
+    try {
+      const isInThread = interaction.channel?.isThread();
+      const thread = isInThread ? (interaction.channel as ThreadChannel) : undefined;
+      const lookupId = thread ? thread.id : interaction.channel!.id;
+
+      const conversationId = this.activeConversations.get(lookupId);
+      if (!conversationId) {
+        await interaction.editReply({
+          content: "No active conversation found. Use `/sbb start` to start a new conversation.",
+        });
+        return;
+      }
+
+      const conversation = this.contextManager.getConversation(conversationId);
+      if (!conversation) {
+        await interaction.editReply({
+          content: "Conversation not found.",
+        });
+        return;
+      }
+
+      if (conversation.status !== "planning") {
+        await interaction.editReply({
+          content: `Conversation is not in planning phase. Current status: ${conversation.status}`,
+        });
+        return;
+      }
+
+      // Compile previous messages if in thread
+      if (isInThread && thread && conversation.messages.length > 1) {
+        await interaction.editReply({
+          content: `📝 Compiling previous discussion before starting...`,
+        });
+
+        try {
+          // Process Scribe first (TLDR depends on Scribe's output)
+          await this.scribeBot.processMessagesImmediate(conversation);
+          
+          // Then process TLDR (which uses Scribe's output)
+          await this.tldrBot.updateImmediate(conversation);
+
+          await interaction.editReply({
+            content: `✅ Previous discussion compiled. Starting conversation...`,
+          });
+        } catch (error) {
+          logger.error("Error compiling previous discussion:", error);
+          // Continue anyway - compilation is not critical
+        }
+      }
+
+      // Approve and start
+      await this.sessionPlanner.approveAndStart(conversationId);
+      await interaction.editReply({
+        content: `✅ Conversation started! All participants can now engage.`,
+      });
+    } catch (error) {
+      logger.error("Error approving conversation:", error);
+      await interaction.editReply({
+        content: `Failed to start conversation: ${
+          error instanceof Error ? error.message : "Unknown error"
+        }`,
+      });
+    }
+  }
+
+  /**
+   * Handle /sbb edit command - Edit planning message
+   */
+  private async handleEditCommand(
+    interaction: ChatInputCommandInteraction
+  ): Promise<void> {
+    await interaction.deferReply({ ephemeral: false });
+
+    try {
+      const isInThread = interaction.channel?.isThread();
+      const thread = isInThread ? (interaction.channel as ThreadChannel) : undefined;
+      const lookupId = thread ? thread.id : interaction.channel!.id;
+
+      const conversationId = this.activeConversations.get(lookupId);
+      if (!conversationId) {
+        await interaction.editReply({
+          content: "No active conversation found. Use `/sbb start` to start a new conversation.",
+        });
+        return;
+      }
+
+      const conversation = this.contextManager.getConversation(conversationId);
+      if (!conversation) {
+        await interaction.editReply({
+          content: "Conversation not found.",
+        });
+        return;
+      }
+
+      if (conversation.status !== "planning") {
+        await interaction.editReply({
+          content: `Conversation is not in planning phase. Current status: ${conversation.status}`,
+        });
+        return;
+      }
+
+      const newMessage = interaction.options.getString("message", true);
+      
+      // Create a new message with the edited content
+      const editedMessage: AppMessage = {
+        id: `edit-${Date.now()}`,
+        conversationId,
+        authorId: interaction.user.id,
+        authorType: "user",
+        content: newMessage,
+        replyTo: [],
+        timestamp: new Date(),
+      };
+
+      // Add the edited message to conversation
+      this.contextManager.addMessage(conversationId, editedMessage);
+
+      // Re-trigger planning with the edited message
+      await this.sessionPlanner.handlePlanningResponse(conversationId, editedMessage);
+
+      await interaction.editReply({
+        content: `✅ Planning message updated. Session Planner will update the plan based on your changes.`,
+      });
+    } catch (error) {
+      logger.error("Error editing planning message:", error);
+      await interaction.editReply({
+        content: `Failed to edit planning message: ${
           error instanceof Error ? error.message : "Unknown error"
         }`,
       });
@@ -673,6 +793,24 @@ export class DiscordBot {
                   .setRequired(false)
               )
           )
+          // Go command (approve and start)
+          .addSubcommand((subcommand) =>
+            subcommand
+              .setName("go")
+              .setDescription("Approve plan and start conversation (compiles previous discussion if in thread)")
+          )
+          // Edit command (edit planning)
+          .addSubcommand((subcommand) =>
+            subcommand
+              .setName("edit")
+              .setDescription("Edit the planning message while in planning mode")
+              .addStringOption((option) =>
+                option
+                  .setName("message")
+                  .setDescription("New planning message or instructions")
+                  .setRequired(true)
+              )
+          )
           // Continue command
           .addSubcommand((subcommand) =>
             subcommand
@@ -783,6 +921,12 @@ export class DiscordBot {
       switch (subcommand) {
         case "start":
           await this.handleStartCommand(interaction);
+          break;
+        case "go":
+          await this.handleGoCommand(interaction);
+          break;
+        case "edit":
+          await this.handleEditCommand(interaction);
           break;
         case "settings":
           await this.handleSettingsCommand(interaction);

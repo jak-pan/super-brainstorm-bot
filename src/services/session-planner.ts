@@ -135,7 +135,7 @@ export class SessionPlanner {
           .map((q, i) => `${i + 1}. ${q}`)
           .join("\n");
         await this.messageCallback(
-          `**Session Planner** 🤔\n\nI'd like to clarify a few things before we start:\n\n${questionsText}\n\nPlease reply with your answers, or use \`/sbb start\` to proceed with defaults.`,
+          `**Session Planner** 🤔\n\nI'd like to clarify a few things before we start:\n\n${questionsText}\n\nPlease reply with your answers, or use \`/sbb go\` to proceed with defaults. Use \`/sbb edit\` to modify your initial message.`,
           initialMessage.discordMessageId
         );
       } else if (this.messageCallback) {
@@ -226,7 +226,7 @@ export class SessionPlanner {
 
       // Post plan for approval
       if (this.messageCallback) {
-        const planText = `**Session Plan** 📋\n\n**Topic:** ${planData.expandedTopic}\n\n**Plan:**\n${planData.plan}\n\n**Parameters:**\n- Max Messages: ${planData.parameters.maxMessages}\n- Cost Limit: $${planData.parameters.costLimit}\n- Timeout: ${planData.parameters.timeoutMinutes} minutes\n- Context Window: ${planData.parameters.maxContextWindowPercent}%\n\nType \`/sbb start\` to begin the conversation.`;
+        const planText = `**Session Plan** 📋\n\n**Topic:** ${planData.expandedTopic}\n\n**Plan:**\n${planData.plan}\n\n**Parameters:**\n- Max Messages: ${planData.parameters.maxMessages}\n- Cost Limit: $${planData.parameters.costLimit}\n- Timeout: ${planData.parameters.timeoutMinutes} minutes\n- Context Window: ${planData.parameters.maxContextWindowPercent}%\n\nType \`/sbb go\` to begin the conversation, or \`/sbb edit\` to modify the plan.`;
         await this.messageCallback(planText);
       }
     } catch (error) {
@@ -533,9 +533,9 @@ export class SessionPlanner {
     conversation.planningState.awaitingApproval = true;
 
     if (this.messageCallback) {
-      await this.messageCallback(
-        `**Session Plan** 📋\n\nUsing default parameters. Use \`/sbb start\` to begin.`
-      );
+        await this.messageCallback(
+          `**Session Plan** 📋\n\nUsing default parameters. Use \`/sbb go\` to begin, or \`/sbb edit\` to modify the plan.`
+        );
     }
   }
 

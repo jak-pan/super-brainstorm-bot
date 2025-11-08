@@ -111,7 +111,7 @@ Use `/sbb start` to begin a new conversation. The command automatically detects 
   * Fetches all previous messages from the thread (adds them to context)
   * Starts planning immediately with the first message
   * Session Planner analyzes and creates a plan
-  * When you approve the plan (call `/sbb start` again), previous messages are compiled using Scribe (detailed documentation) and TLDR (summary)
+  * When you approve the plan (use `/sbb go`), previous messages are compiled using Scribe (detailed documentation) and TLDR (summary)
   * Then the conversation starts with all bots active
 
 The bot will automatically detect the task type and select appropriate AI models.
@@ -122,9 +122,12 @@ All commands use the `/sbb` prefix:
 
 #### Conversation Management
 
-* `/sbb start [topic]` - Start a new conversation or approve plan
-  * **First call**: Starts planning immediately (in threads, previous messages are added but not compiled yet)
-  * **Second call** (approval): Compiles previous discussion (Scribe + TLDR) if in thread, then starts conversation
+* `/sbb start [topic]` - Start a new conversation (starts planning immediately)
+  * In threads: Previous messages are added to context but not compiled yet
+* `/sbb go` - Approve plan and start conversation
+  * Compiles previous discussion (Scribe + TLDR) if in thread, then starts conversation
+* `/sbb edit [message]` - Edit the planning message while in planning mode
+  * Updates the plan based on your changes
 * `/sbb continue` - Continue a paused conversation
 
 #### Model Management
@@ -162,7 +165,7 @@ All commands use the `/sbb` prefix:
 2. **Planning starts immediately** - Planner analyzes the first message and creates a conversation plan
 3. **Thread messages** (if in thread): Previous messages are added to context but not compiled yet
 4. **Task type detection** - Bot automatically detects task type (general/coding/architecture) and selects appropriate models
-5. **User approval** - User approves the plan by calling `/sbb start` again
+5. **User approval** - User approves the plan by calling `/sbb go` (or uses `/sbb edit` to modify the plan)
 6. **Thread compilation** (on approval, if in thread): Previous messages are compiled by Scribe (detailed) and TLDR (summary)
 7. **Conversation starts** - All bots become active and the conversation begins
 8. **AI models respond** - Multiple AIs generate responses based on the conversation context

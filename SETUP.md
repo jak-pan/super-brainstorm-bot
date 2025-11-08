@@ -187,10 +187,10 @@ npm start
 
 3. Use `/sbb start [topic]` to start a new conversation
    * **In a channel**: Starts planning immediately
-   * **In a thread**: 
+   * **In a thread**:
      * Fetches all previous messages (adds to context)
      * Starts planning immediately with first message
-     * When you approve (call `/sbb start` again), previous messages are compiled (Scribe + TLDR)
+     * When you approve (use `/sbb go`), previous messages are compiled (Scribe + TLDR)
      * Then conversation starts with all bots active
 
 4. The bot will automatically detect the task type and select appropriate AI models
@@ -238,9 +238,12 @@ All commands use the `/sbb` prefix. Once the bot is running, you can use these s
 
 ### Conversation Management
 
-* `/sbb start [topic]` - Start a new conversation or approve plan
-  * **First call**: Starts planning immediately (in threads, previous messages added but not compiled)
-  * **Second call** (approval): Compiles previous discussion (Scribe + TLDR) if in thread, then starts conversation
+* `/sbb start [topic]` - Start a new conversation (starts planning immediately)
+  * In threads: Previous messages are added to context but not compiled yet
+* `/sbb go` - Approve plan and start conversation
+  * Compiles previous discussion (Scribe + TLDR) if in thread, then starts conversation
+* `/sbb edit [message]` - Edit the planning message while in planning mode
+  * Updates the plan based on your changes
 * `/sbb continue` - Continue a paused conversation
 
 ### Model Management
