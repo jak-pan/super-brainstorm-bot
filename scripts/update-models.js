@@ -14,6 +14,36 @@ const __filename = fileURLToPath(import.meta.url);
 const __dirname = dirname(__filename);
 
 const MODELS_FILE = join(__dirname, "../src/config/models.json");
+const FALLBACK_MODELS_FILE = join(__dirname, "fallback-models.json");
+const PRICING_FILE = join(__dirname, "pricing.json");
+
+// Load fallback models and pricing from JSON files
+let fallbackModels = null;
+let pricingData = null;
+
+function loadFallbackModels() {
+  if (!fallbackModels) {
+    try {
+      fallbackModels = JSON.parse(readFileSync(FALLBACK_MODELS_FILE, "utf-8"));
+    } catch (error) {
+      console.error("❌ Failed to load fallback-models.json:", error);
+      process.exit(1);
+    }
+  }
+  return fallbackModels;
+}
+
+function loadPricingData() {
+  if (!pricingData) {
+    try {
+      pricingData = JSON.parse(readFileSync(PRICING_FILE, "utf-8"));
+    } catch (error) {
+      console.error("❌ Failed to load pricing.json:", error);
+      process.exit(1);
+    }
+  }
+  return pricingData;
+}
 
 /**
  * Make HTTPS request
@@ -97,77 +127,41 @@ async function fetchOpenAIModels(apiKey) {
     console.log(
       "⚠️  No models from API, using known current models as fallback"
     );
-    return [
-      { id: "gpt-5-pro", name: "GPT-5 Pro" },
-      { id: "gpt-5", name: "GPT-5" },
-      { id: "gpt-5-mini", name: "GPT-5 Mini" },
-      { id: "gpt-5-nano", name: "GPT-5 Nano" },
-      { id: "gpt-4o", name: "GPT-4o" },
-      { id: "gpt-4o-mini", name: "GPT-4o Mini" },
-      { id: "gpt-4-turbo", name: "GPT-4 Turbo" },
-      { id: "gpt-3.5-turbo", name: "GPT-3.5 Turbo" },
-    ];
+    return loadFallbackModels().openai;
   } catch (error) {
     console.warn(`⚠️  Could not fetch OpenAI models: ${error.message}`);
     console.warn("   Using known current models as fallback");
-    // Return known current models as fallback
-    return [
-      { id: "gpt-5-pro", name: "GPT-5 Pro" },
-      { id: "gpt-5", name: "GPT-5" },
-      { id: "gpt-5-mini", name: "GPT-5 Mini" },
-      { id: "gpt-5-nano", name: "GPT-5 Nano" },
-      { id: "gpt-4o", name: "GPT-4o" },
-      { id: "gpt-4o-mini", name: "GPT-4o Mini" },
-      { id: "gpt-4-turbo", name: "GPT-4 Turbo" },
-      { id: "gpt-3.5-turbo", name: "GPT-3.5 Turbo" },
-    ];
+    return loadFallbackModels().openai;
   }
 }
 
 /**
- * Get OpenAI pricing - updated with latest pricing from official sources
+ * Get OpenAI pricing - loaded from pricing.json
  * Prices are per 1k tokens (converted from per 1M tokens)
  */
 function getOpenAIPricing(modelId) {
   const id = modelId.toLowerCase();
-
-  // Latest pricing (as of November 2025) - update when pricing changes
-  // Prices are per 1k tokens
-  const pricingMap = {
-    // GPT-5 series (latest)
-    "gpt-5-pro": { input: 0.015, output: 0.12 },
-    "gpt-5": { input: 0.00125, output: 0.01 },
-    "gpt-5-mini": { input: 0.00025, output: 0.002 },
-    "gpt-5-nano": { input: 0.00005, output: 0.0004 },
-    // GPT-4o series
-    "gpt-4o": { input: 0.0025, output: 0.01 },
-    "gpt-4o-mini": { input: 0.00015, output: 0.0006 },
-    // GPT-4 series
-    "gpt-4-turbo": { input: 0.01, output: 0.03 },
-    "gpt-4": { input: 0.03, output: 0.06 },
-    // GPT-3.5 series
-    "gpt-3.5-turbo": { input: 0.0005, output: 0.0015 },
-  };
+  const pricing = loadPricingData().openai;
 
   // Try exact match first
-  if (pricingMap[id]) {
-    return pricingMap[id];
+  if (pricing[id]) {
+    return pricing[id];
   }
 
   // Pattern matching for variants
-  if (id.includes("gpt-5-pro")) return pricingMap["gpt-5-pro"];
+  if (id.includes("gpt-5-pro")) return pricing["gpt-5-pro"] || { input: 0.002, output: 0.008 };
   if (id.includes("gpt-5") && id.includes("mini"))
-    return pricingMap["gpt-5-mini"];
+    return pricing["gpt-5-mini"] || { input: 0.002, output: 0.008 };
   if (id.includes("gpt-5") && id.includes("nano"))
-    return pricingMap["gpt-5-nano"];
-  if (id.includes("gpt-5")) return pricingMap["gpt-5"];
+    return pricing["gpt-5-nano"] || { input: 0.002, output: 0.008 };
+  if (id.includes("gpt-5")) return pricing["gpt-5"] || { input: 0.002, output: 0.008 };
   if (id.includes("gpt-4o") && id.includes("mini"))
-    return pricingMap["gpt-4o-mini"];
-  if (id.includes("gpt-4o")) return pricingMap["gpt-4o"];
-  if (id.includes("gpt-4-turbo")) return pricingMap["gpt-4-turbo"];
+    return pricing["gpt-4o-mini"] || { input: 0.002, output: 0.008 };
+  if (id.includes("gpt-4o")) return pricing["gpt-4o"] || { input: 0.002, output: 0.008 };
+  if (id.includes("gpt-4-turbo")) return pricing["gpt-4-turbo"] || { input: 0.002, output: 0.008 };
   if (id.includes("gpt-4") && !id.includes("turbo") && !id.includes("o"))
-    return pricingMap["gpt-4"];
-  if (id.includes("gpt-3.5")) return pricingMap["gpt-3.5-turbo"];
+    return pricing["gpt-4"] || { input: 0.002, output: 0.008 };
+  if (id.includes("gpt-3.5")) return pricing["gpt-3.5-turbo"] || { input: 0.002, output: 0.008 };
 
   // Default fallback pricing
   return { input: 0.002, output: 0.008 };
@@ -183,14 +177,7 @@ async function fetchAnthropicModels(apiKey) {
     console.log(
       "ℹ️  ANTHROPIC_API_KEY not set, using known Anthropic models as fallback"
     );
-    // Return known models as fallback
-    return [
-      { id: "claude-sonnet-4-20250514", name: "Claude Sonnet 4" },
-      { id: "claude-opus-4.1", name: "Claude Opus 4.1" },
-      { id: "claude-sonnet-4.5", name: "Claude Sonnet 4.5" },
-      { id: "claude-haiku-4.5", name: "Claude Haiku 4.5" },
-      { id: "claude-3-5-sonnet-20241022", name: "Claude 3.5 Sonnet" },
-    ];
+    return loadFallbackModels().anthropic;
   }
 
   try {
@@ -205,9 +192,7 @@ async function fetchAnthropicModels(apiKey) {
 
     const models = response.data || [];
     const claudeModels = models
-      .filter(
-        (m) => m.type === "model" && m.id && m.id.startsWith("claude-")
-      )
+      .filter((m) => m.type === "model" && m.id && m.id.startsWith("claude-"))
       .map((m) => ({
         id: m.id,
         name: m.display_name || m.id,
@@ -221,54 +206,132 @@ async function fetchAnthropicModels(apiKey) {
 
     // Fallback to known models if API doesn't return any
     console.warn("⚠️  No models from API, using known models as fallback");
-    return [
-      { id: "claude-sonnet-4-20250514", name: "Claude Sonnet 4" },
-      { id: "claude-opus-4.1", name: "Claude Opus 4.1" },
-      { id: "claude-sonnet-4.5", name: "Claude Sonnet 4.5" },
-      { id: "claude-haiku-4.5", name: "Claude Haiku 4.5" },
-      { id: "claude-3-5-sonnet-20241022", name: "Claude 3.5 Sonnet" },
-    ];
+    return loadFallbackModels().anthropic;
   } catch (error) {
     console.warn(`⚠️  Could not fetch Anthropic models: ${error.message}`);
     console.warn("   Using known models as fallback");
-    // Return known models as fallback
-    return [
-      { id: "claude-sonnet-4-20250514", name: "Claude Sonnet 4" },
-      { id: "claude-opus-4.1", name: "Claude Opus 4.1" },
-      { id: "claude-sonnet-4.5", name: "Claude Sonnet 4.5" },
-      { id: "claude-haiku-4.5", name: "Claude Haiku 4.5" },
-      { id: "claude-3-5-sonnet-20241022", name: "Claude 3.5 Sonnet" },
-    ];
+    return loadFallbackModels().anthropic;
   }
 }
 
 /**
- * Get Anthropic pricing - updated with latest pricing
+ * Scrape Anthropic pricing from their pricing page
+ * Since pricing is not available via API, we scrape from https://www.anthropic.com/pricing
+ * Returns raw HTML string for parsing
+ */
+async function scrapeAnthropicPricingHTML() {
+  try {
+    console.log("📡 Attempting to scrape Anthropic pricing page...");
+    return new Promise((resolve, reject) => {
+      const url = new URL("https://www.anthropic.com/pricing");
+      const options = {
+        hostname: url.hostname,
+        path: url.pathname,
+        method: "GET",
+        headers: {
+          "User-Agent": "Mozilla/5.0 (compatible; ModelUpdater/1.0)",
+        },
+      };
+
+      const req = https.request(options, (res) => {
+        let data = "";
+        res.on("data", (chunk) => {
+          data += chunk;
+        });
+        res.on("end", () => {
+          if (res.statusCode === 200) {
+            resolve(data);
+          } else {
+            reject(new Error(`HTTP ${res.statusCode}`));
+          }
+        });
+      });
+
+      req.on("error", reject);
+      req.setTimeout(10000, () => {
+        req.destroy();
+        reject(new Error("Request timeout"));
+      });
+      req.end();
+    });
+  } catch (error) {
+    console.warn(`⚠️  Could not scrape Anthropic pricing: ${error.message}`);
+    return null;
+  }
+}
+
+/**
+ * Parse pricing from Anthropic pricing page HTML
+ * This is a basic implementation - may need refinement based on actual page structure
+ */
+function parseAnthropicPricingFromHTML(html) {
+  if (!html) return null;
+
+  try {
+    // Extract pricing information from HTML
+    // This is a simplified parser - actual implementation would need to handle
+    // the specific HTML structure of Anthropic's pricing page
+    
+    // Look for pricing patterns in the HTML
+    // Example patterns to look for:
+    // - "$X.XX per million input tokens"
+    // - "$X.XX per million output tokens"
+    // - Model names and their associated prices
+    
+    const pricing = {};
+    
+    // Regex patterns to extract pricing (adjust based on actual page structure)
+    const modelPatterns = [
+      { name: "claude-sonnet-4", patterns: [/sonnet\s*4[^\$]*\$([\d.]+)/gi, /sonnet\s*4[^\$]*\$([\d.]+)/gi] },
+      { name: "claude-opus-4.1", patterns: [/opus\s*4[^\$]*\$([\d.]+)/gi, /opus\s*4[^\$]*\$([\d.]+)/gi] },
+      { name: "claude-haiku-4.5", patterns: [/haiku\s*4[^\$]*\$([\d.]+)/gi, /haiku\s*4[^\$]*\$([\d.]+)/gi] },
+    ];
+
+    // TODO: Implement actual HTML parsing logic here
+    // For now, return null to use pricing.json
+    console.warn("⚠️  HTML parsing not fully implemented, using pricing.json");
+    return null;
+  } catch (error) {
+    console.warn(`⚠️  Error parsing pricing HTML: ${error.message}`);
+    return null;
+  }
+}
+
+/**
+ * Update Anthropic pricing from scraped data
+ */
+async function updateAnthropicPricing() {
+  try {
+    const html = await scrapeAnthropicPricingHTML();
+    if (!html) {
+      console.log("ℹ️  Using pricing.json for Anthropic pricing");
+      return;
+    }
+
+    const scrapedPricing = parseAnthropicPricingFromHTML(html);
+    if (scrapedPricing) {
+      // Update pricing.json with scraped data
+      const pricing = loadPricingData();
+      pricing.anthropic = { ...pricing.anthropic, ...scrapedPricing };
+      writeFileSync(PRICING_FILE, JSON.stringify(pricing, null, 2) + "\n", "utf-8");
+      console.log("✅ Updated Anthropic pricing from scraped data");
+    }
+  } catch (error) {
+    console.warn(`⚠️  Could not update Anthropic pricing: ${error.message}`);
+  }
+}
+
+/**
+ * Get Anthropic pricing - loaded from pricing.json (or scraped if available)
  * Prices are per 1k tokens (converted from per 1M tokens)
  */
 function getAnthropicPricing(modelId) {
   const id = modelId.toLowerCase();
-
-  // Latest pricing (as of November 2025) - update when pricing changes
-  // Prices are per 1k tokens
-  const pricingMap = {
-    // Claude 4 series (latest)
-    "claude-sonnet-4-20250514": { input: 0.003, output: 0.015 },
-    "claude-opus-4.1": { input: 0.015, output: 0.075 },
-    "claude-sonnet-4.5": { input: 0.003, output: 0.015 },
-    "claude-haiku-4.5": { input: 0.001, output: 0.005 },
-    // Claude 3.5 series
-    "claude-3-5-sonnet-20241022": { input: 0.003, output: 0.015 },
-    "claude-3-5-sonnet-20240620": { input: 0.003, output: 0.015 },
-    // Claude 3 series
-    "claude-3-opus-20240229": { input: 0.015, output: 0.075 },
-    "claude-3-sonnet-20240229": { input: 0.003, output: 0.015 },
-    "claude-3-haiku-20240307": { input: 0.00025, output: 0.00125 },
-  };
+  const pricing = loadPricingData().anthropic;
 
   // Try exact match
-  if (pricingMap[id]) {
-    return pricingMap[id];
+  if (pricing[id]) {
+    return pricing[id];
   }
 
   // Pattern matching
@@ -277,25 +340,25 @@ function getAnthropicPricing(modelId) {
     id.includes("4") &&
     (id.includes("2025") || id.includes("50514"))
   ) {
-    return pricingMap["claude-sonnet-4-20250514"];
+    return pricing["claude-sonnet-4-20250514"] || { input: 0.003, output: 0.015 };
   }
   if (id.includes("opus") && (id.includes("4") || id.includes("4.1"))) {
-    return pricingMap["claude-opus-4.1"];
+    return pricing["claude-opus-4.1"] || { input: 0.003, output: 0.015 };
   }
   if (id.includes("sonnet") && (id.includes("4") || id.includes("4.5"))) {
-    return pricingMap["claude-sonnet-4.5"];
+    return pricing["claude-sonnet-4.5"] || { input: 0.003, output: 0.015 };
   }
   if (id.includes("haiku") && (id.includes("4") || id.includes("4.5"))) {
-    return pricingMap["claude-haiku-4.5"];
+    return pricing["claude-haiku-4.5"] || { input: 0.003, output: 0.015 };
   }
   if (id.includes("opus")) {
-    return pricingMap["claude-3-opus-20240229"];
+    return pricing["claude-3-opus-20240229"] || { input: 0.003, output: 0.015 };
   }
   if (id.includes("sonnet")) {
-    return pricingMap["claude-3-5-sonnet-20241022"];
+    return pricing["claude-3-5-sonnet-20241022"] || { input: 0.003, output: 0.015 };
   }
   if (id.includes("haiku")) {
-    return pricingMap["claude-3-haiku-20240307"];
+    return pricing["claude-3-haiku-20240307"] || { input: 0.003, output: 0.015 };
   }
 
   // Default fallback
@@ -340,32 +403,19 @@ async function fetchGrokModels(apiKey) {
     }
 
     // Use known models as fallback
-    return [
-      { id: "grok-beta", name: "Grok Beta" },
-      { id: "grok-2", name: "Grok-2" },
-    ];
+    return loadFallbackModels().grok;
   } catch (error) {
     console.warn(`⚠️  Error fetching Grok models: ${error.message}`);
-    // Return known models as fallback
-    return [
-      { id: "grok-beta", name: "Grok Beta" },
-      { id: "grok-2", name: "Grok-2" },
-    ];
+    return loadFallbackModels().grok;
   }
 }
 
 /**
- * Get Grok pricing
+ * Get Grok pricing - loaded from pricing.json
  */
 function getGrokPricing(modelId) {
-  // Known pricing - update when Grok updates pricing
-  // Prices are per 1k tokens
-  const pricingMap = {
-    "grok-beta": { input: 0.001, output: 0.001 },
-    "grok-2": { input: 0.001, output: 0.001 },
-  };
-
-  return pricingMap[modelId] || { input: 0.001, output: 0.001 };
+  const pricing = loadPricingData().grok;
+  return pricing[modelId] || { input: 0.001, output: 0.001 };
 }
 
 /**
