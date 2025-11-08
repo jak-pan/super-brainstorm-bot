@@ -94,6 +94,7 @@ export class NotionService {
       // This is a simplified version - in production, you'd want better filtering
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
       const blocks = response.results.filter(
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
         (block: any) =>
           block.type === "paragraph" &&
           block.paragraph?.rich_text?.[0]?.plain_text?.includes(conversationId)

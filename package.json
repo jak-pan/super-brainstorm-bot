@@ -9,10 +9,14 @@
     "start": "node dist/index.js",
     "dev": "tsx watch src/index.ts",
     "lint": "eslint src --ext .ts",
+    "lint:mermaid": "node scripts/lint-mermaid.js",
+    "lint:all": "npm run lint && npm run lint:mermaid",
     "type-check": "tsc --noEmit",
     "test": "NODE_OPTIONS=--experimental-vm-modules jest",
     "test:watch": "NODE_OPTIONS=--experimental-vm-modules jest --watch",
-    "test:coverage": "NODE_OPTIONS=--experimental-vm-modules jest --coverage"
+    "test:coverage": "NODE_OPTIONS=--experimental-vm-modules jest --coverage",
+    "precommit": "npm run lint:all",
+    "prepare": "husky"
   },
   "keywords": [
     "discord",
@@ -38,11 +42,13 @@
   },
   "devDependencies": {
     "@jest/globals": "^30.2.0",
+    "@mermaid-js/mermaid-cli": "^11.12.0",
     "@types/jest": "^30.0.0",
     "@types/node": "^20.11.5",
     "@typescript-eslint/eslint-plugin": "^6.19.1",
     "@typescript-eslint/parser": "^6.19.1",
     "eslint": "^8.56.0",
+    "husky": "^9.1.7",
     "jest": "^30.2.0",
     "ts-jest": "^29.4.5",
     "tsx": "^4.7.1",
