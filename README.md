@@ -107,7 +107,7 @@ npm run dev
 Use `/sbb start` to begin a new conversation. The command automatically detects if you're in a channel or thread:
 
 * **In a channel**: Starts planning immediately
-* **In a thread**: 
+* **In a thread**:
   * Fetches all previous messages from the thread (adds them to context)
   * Starts planning immediately with the first message
   * Session Planner analyzes and creates a plan
@@ -166,13 +166,13 @@ All commands use the `/sbb` prefix:
 6. **Thread compilation** (on approval, if in thread): Previous messages are compiled by Scribe (detailed) and TLDR (summary)
 7. **Conversation starts** - All bots become active and the conversation begins
 8. **AI models respond** - Multiple AIs generate responses based on the conversation context
-7. **AIs interact** - AIs can respond to each other, building on previous responses
-8. **Scribe bot documents** - The conversation is automatically documented in detail and stored in Notion (async, non-blocking)
-9. **TLDR bot summarizes** - Key findings and summaries are extracted from Scribe's detailed documentation (async, non-blocking)
-10. **Cost tracking** - All costs are tracked directly from OpenRouter API responses (in USD) and aggregated per conversation
-11. **Automatic limits** - Conversations pause automatically when conversation cost limit ($22 default) is reached; image generation is blocked when image cost limit ($2 default) is reached
-12. **Unblock image generation** - Use `/sbb unblock-image` to resume image generation after it's been blocked
-13. **Context refresh** - When message count threshold is reached, the bot automatically refreshes context from Notion
+9. **AIs interact** - AIs can respond to each other, building on previous responses
+10. **Scribe bot documents** - The conversation is automatically documented in detail and stored in Notion (async, non-blocking)
+11. **TLDR bot summarizes** - Key findings and summaries are extracted from Scribe's detailed documentation (async, non-blocking)
+12. **Cost tracking** - All costs are tracked directly from OpenRouter API responses (in USD) and aggregated per conversation
+13. **Automatic limits** - Conversations pause automatically when conversation cost limit ($22 default) is reached; image generation is blocked when image cost limit ($2 default) is reached
+14. **Unblock image generation** - Use `/sbb unblock-image` to resume image generation after it's been blocked
+15. **Context refresh** - When message count threshold is reached, the bot automatically refreshes context from Notion
 
 ## Project Structure
 
