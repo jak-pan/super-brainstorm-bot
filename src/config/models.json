@@ -25,7 +25,7 @@
           "output": 0.01,
           "unit": "per_1k_tokens"
         },
-        "smartest": true,
+        "smartest": false,
         "available": true
       },
       {
@@ -64,7 +64,7 @@
           "output": 0.01,
           "unit": "per_1k_tokens"
         },
-        "smartest": true,
+        "smartest": false,
         "available": true
       },
       {
@@ -136,7 +136,7 @@
           "output": 0.015,
           "unit": "per_1k_tokens"
         },
-        "smartest": true,
+        "smartest": false,
         "available": false
       },
       {
@@ -162,7 +162,7 @@
           "output": 0.015,
           "unit": "per_1k_tokens"
         },
-        "smartest": true,
+        "smartest": false,
         "available": false
       },
       {
@@ -175,7 +175,7 @@
           "output": 0.015,
           "unit": "per_1k_tokens"
         },
-        "smartest": true,
+        "smartest": false,
         "available": false
       },
       {
@@ -188,7 +188,7 @@
           "output": 0.075,
           "unit": "per_1k_tokens"
         },
-        "smartest": true,
+        "smartest": false,
         "available": false
       },
       {
@@ -201,7 +201,7 @@
           "output": 0.015,
           "unit": "per_1k_tokens"
         },
-        "smartest": true,
+        "smartest": false,
         "available": false
       },
       {

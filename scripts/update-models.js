@@ -470,14 +470,19 @@ async function updateModels() {
       const modelIds = openaiModels.map((m) => m.id);
       let smartestModelId = null;
 
+      // First pass: find the smartest model
+      for (const model of openaiModels) {
+        if (isSmartestModel("openai", model.id, modelIds)) {
+          smartestModelId = model.id;
+          break; // Only one smartest model
+        }
+      }
+
+      // Second pass: build models array
       openaiModels.forEach((model) => {
         const pricing = getOpenAIPricing(model.id);
         const contextWindow = getContextWindow("openai", model.id);
-        const isSmartest = isSmartestModel("openai", model.id, modelIds);
-
-        if (isSmartest && !smartestModelId) {
-          smartestModelId = model.id;
-        }
+        const isSmartest = model.id === smartestModelId;
 
         newModels.openai.models.push({
           id: model.id,
@@ -507,14 +512,19 @@ async function updateModels() {
       const modelIds = anthropicModels.map((m) => m.id);
       let smartestModelId = null;
 
+      // First pass: find the smartest model
+      for (const model of anthropicModels) {
+        if (isSmartestModel("anthropic", model.id, modelIds)) {
+          smartestModelId = model.id;
+          break; // Only one smartest model
+        }
+      }
+
+      // Second pass: build models array
       anthropicModels.forEach((model) => {
         const pricing = getAnthropicPricing(model.id);
         const contextWindow = getContextWindow("anthropic", model.id);
-        const isSmartest = isSmartestModel("anthropic", model.id, modelIds);
-
-        if (isSmartest && !smartestModelId) {
-          smartestModelId = model.id;
-        }
+        const isSmartest = model.id === smartestModelId;
 
         newModels.anthropic.models.push({
           id: model.id,
@@ -543,14 +553,19 @@ async function updateModels() {
       const modelIds = grokModels.map((m) => m.id);
       let smartestModelId = null;
 
+      // First pass: find the smartest model
+      for (const model of grokModels) {
+        if (isSmartestModel("grok", model.id, modelIds)) {
+          smartestModelId = model.id;
+          break; // Only one smartest model
+        }
+      }
+
+      // Second pass: build models array
       grokModels.forEach((model) => {
         const pricing = getGrokPricing(model.id);
         const contextWindow = getContextWindow("grok", model.id);
-        const isSmartest = isSmartestModel("grok", model.id, modelIds);
-
-        if (isSmartest && !smartestModelId) {
-          smartestModelId = model.id;
-        }
+        const isSmartest = model.id === smartestModelId;
 
         newModels.grok.models.push({
           id: model.id,
