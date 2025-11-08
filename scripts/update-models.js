@@ -233,54 +233,54 @@ async function scrapeAnthropicPricingHTML(
   }
 
   return new Promise((resolve, reject) => {
-      const urlObj = new URL(url);
-      const options = {
-        hostname: urlObj.hostname,
-        path: urlObj.pathname + urlObj.search,
-        method: "GET",
-        headers: {
-          "User-Agent": "Mozilla/5.0 (compatible; ModelUpdater/1.0)",
-          Accept:
-            "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8",
-        },
-      };
+    const urlObj = new URL(url);
+    const options = {
+      hostname: urlObj.hostname,
+      path: urlObj.pathname + urlObj.search,
+      method: "GET",
+      headers: {
+        "User-Agent": "Mozilla/5.0 (compatible; ModelUpdater/1.0)",
+        Accept:
+          "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8",
+      },
+    };
 
-      const req = https.request(options, (res) => {
-        // Handle redirects
-        if (res.statusCode >= 300 && res.statusCode < 400) {
-          const location = res.headers.location;
-          if (location) {
-            // Resolve relative URLs
-            const redirectUrl = location.startsWith("http")
-              ? location
-              : `${urlObj.protocol}//${urlObj.hostname}${location}`;
-            // Follow redirect recursively
-            return scrapeAnthropicPricingHTML(redirectUrl, maxRedirects - 1)
-              .then(resolve)
-              .catch(reject);
-          }
+    const req = https.request(options, (res) => {
+      // Handle redirects
+      if (res.statusCode >= 300 && res.statusCode < 400) {
+        const location = res.headers.location;
+        if (location) {
+          // Resolve relative URLs
+          const redirectUrl = location.startsWith("http")
+            ? location
+            : `${urlObj.protocol}//${urlObj.hostname}${location}`;
+          // Follow redirect recursively
+          return scrapeAnthropicPricingHTML(redirectUrl, maxRedirects - 1)
+            .then(resolve)
+            .catch(reject);
         }
+      }
 
-        let data = "";
-        res.on("data", (chunk) => {
-          data += chunk;
-        });
-        res.on("end", () => {
-          if (res.statusCode === 200) {
-            resolve(data);
-          } else {
-            reject(new Error(`HTTP ${res.statusCode}`));
-          }
-        });
+      let data = "";
+      res.on("data", (chunk) => {
+        data += chunk;
       });
-
-      req.on("error", reject);
-      req.setTimeout(10000, () => {
-        req.destroy();
-        reject(new Error("Request timeout"));
+      res.on("end", () => {
+        if (res.statusCode === 200) {
+          resolve(data);
+        } else {
+          reject(new Error(`HTTP ${res.statusCode}`));
+        }
       });
-      req.end();
     });
+
+    req.on("error", reject);
+    req.setTimeout(10000, () => {
+      req.destroy();
+      reject(new Error("Request timeout"));
+    });
+    req.end();
+  });
 }
 
 /**
@@ -300,30 +300,29 @@ function parseAnthropicPricingFromHTML(html) {
     // - "$X.XX per million input tokens"
     // - "$X.XX per million output tokens"
     // - Model names and their associated prices
-
-    const pricing = {};
-
-    // Regex patterns to extract pricing (adjust based on actual page structure)
-    const modelPatterns = [
-      {
-        name: "claude-sonnet-4",
-        patterns: [
-          /sonnet\s*4[^\$]*\$([\d.]+)/gi,
-          /sonnet\s*4[^\$]*\$([\d.]+)/gi,
-        ],
-      },
-      {
-        name: "claude-opus-4.1",
-        patterns: [/opus\s*4[^\$]*\$([\d.]+)/gi, /opus\s*4[^\$]*\$([\d.]+)/gi],
-      },
-      {
-        name: "claude-haiku-4.5",
-        patterns: [
-          /haiku\s*4[^\$]*\$([\d.]+)/gi,
-          /haiku\s*4[^\$]*\$([\d.]+)/gi,
-        ],
-      },
-    ];
+    
+    // TODO: Implement actual parsing logic
+    // const pricing = {};
+    // const modelPatterns = [
+    //   {
+    //     name: "claude-sonnet-4",
+    //     patterns: [
+    //       /sonnet\s*4[^$]*\$([\d.]+)/gi,
+    //       /sonnet\s*4[^$]*\$([\d.]+)/gi,
+    //     ],
+    //   },
+    //   {
+    //     name: "claude-opus-4.1",
+    //     patterns: [/opus\s*4[^$]*\$([\d.]+)/gi, /opus\s*4[^$]*\$([\d.]+)/gi],
+    //   },
+    //   {
+    //     name: "claude-haiku-4.5",
+    //     patterns: [
+    //       /haiku\s*4[^$]*\$([\d.]+)/gi,
+    //       /haiku\s*4[^$]*\$([\d.]+)/gi,
+    //     ],
+    //   },
+    // ];
 
     // TODO: Implement actual HTML parsing logic here
     // For now, return null to use fallback-pricing.json
