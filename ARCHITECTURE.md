@@ -1276,7 +1276,7 @@ flowchart TD
     style CheckCommand fill:#fff4e1
     style Continue fill:#e8f5e9
     style Stop fill:#ffebee
-    style Pause fill:#fff9c4
+    style Settings fill:#e1f5ff
     style Refresh fill:#e1f5ff
 ```
 
