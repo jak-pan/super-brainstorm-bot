@@ -50,12 +50,16 @@ export class OpenAIAdapter extends BaseAdapter {
           });
 
           const content = response.choices[0]?.message?.content || '';
+          const inputTokens = response.usage?.prompt_tokens || 0;
+          const outputTokens = response.usage?.completion_tokens || 0;
           const tokens = response.usage?.total_tokens || 0;
 
           return {
             content,
             model: this.modelName,
             tokens,
+            inputTokens,
+            outputTokens,
             replyTo: replyTo || [],
             contextUsed: tokens,
           };

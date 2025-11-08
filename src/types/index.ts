@@ -3,6 +3,7 @@ export interface ConversationState {
   channelId: string;
   topic: string;
   participants: string[]; // AI model names + user IDs
+  selectedModels: string[]; // Selected AI models for this conversation
   messages: Message[];
   contextWindow: {
     current: number;
@@ -31,6 +32,17 @@ export interface ConversationState {
     participantBalance: Record<string, number>; // participantId -> message count
     qualityScore?: number;
   };
+  costTracking?: {
+    totalCost: number;
+    totalInputTokens: number;
+    totalOutputTokens: number;
+    costsByModel: Record<string, {
+      cost: number;
+      inputTokens: number;
+      outputTokens: number;
+      requestCount: number;
+    }>;
+  };
   createdAt: Date;
   lastActivity: Date;
   messageCount: number;
@@ -54,8 +66,16 @@ export interface AIResponse {
   content: string;
   model: string;
   tokens: number;
+  inputTokens: number;
+  outputTokens: number;
   replyTo: string[];
   contextUsed: number;
+  cost?: number;
+  costBreakdown?: {
+    inputCost: number;
+    outputCost: number;
+    totalCost: number;
+  };
 }
 
 export interface AIAdapter {
@@ -70,22 +90,49 @@ export interface AIAdapter {
   estimateTokens(text: string): number;
 }
 
+export interface ModelInfo {
+  id: string;
+  name: string;
+  description: string;
+  contextWindow: number;
+  pricing: {
+    input: number;
+    output: number;
+    unit: string;
+  };
+  smartest: boolean;
+  available: boolean;
+}
+
+export interface ProviderModels {
+  provider: string;
+  models: ModelInfo[];
+  defaultModel: string;
+  smartestModel: string;
+}
+
+export interface ModelsConfig {
+  openai: ProviderModels;
+  anthropic: ProviderModels;
+  grok: ProviderModels;
+}
+
 export interface Config {
   discord: {
     token: string;
     guildId: string;
     channelId: string;
   };
-  openai: {
-    apiKey: string;
+  openai?: {
+    apiKey?: string;
     model: string;
   };
-  anthropic: {
-    apiKey: string;
+  anthropic?: {
+    apiKey?: string;
     model: string;
   };
-  grok: {
-    apiKey: string;
+  grok?: {
+    apiKey?: string;
     model: string;
     baseUrl: string;
   };
@@ -125,5 +172,6 @@ export interface Config {
     qualityAssessment: boolean;
   };
   logLevel: string;
+  modelsConfig?: ModelsConfig;
 }
 

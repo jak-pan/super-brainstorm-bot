@@ -1,1 +1,1 @@
-npm run build && npm run lint:all
+node scripts/update-models.js && npm run build && npm run lint:all

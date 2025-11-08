@@ -58,6 +58,7 @@ export class ContextManager {
       channelId,
       topic,
       participants,
+      selectedModels: [], // Will be set during planning
       messages: [],
       contextWindow: {
         current: 0,

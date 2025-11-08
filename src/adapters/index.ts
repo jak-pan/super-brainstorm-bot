@@ -10,27 +10,31 @@ export class AdapterRegistry {
 
   constructor(config: Config) {
     // OpenAI
-    try {
-      const openaiAdapter = new OpenAIAdapter(config.openai.apiKey, config.openai.model);
-      this.adapters.set('chatgpt', openaiAdapter);
-      this.adapters.set('openai', openaiAdapter);
-      logger.info('OpenAI adapter registered');
-    } catch (error) {
-      logger.error('Failed to register OpenAI adapter:', error);
+    if (config.openai?.apiKey) {
+      try {
+        const openaiAdapter = new OpenAIAdapter(config.openai.apiKey, config.openai.model);
+        this.adapters.set('chatgpt', openaiAdapter);
+        this.adapters.set('openai', openaiAdapter);
+        logger.info('OpenAI adapter registered');
+      } catch (error) {
+        logger.error('Failed to register OpenAI adapter:', error);
+      }
     }
 
     // Anthropic
-    try {
-      const anthropicAdapter = new AnthropicAdapter(config.anthropic.apiKey, config.anthropic.model);
-      this.adapters.set('claude', anthropicAdapter);
-      this.adapters.set('anthropic', anthropicAdapter);
-      logger.info('Anthropic adapter registered');
-    } catch (error) {
-      logger.error('Failed to register Anthropic adapter:', error);
+    if (config.anthropic?.apiKey) {
+      try {
+        const anthropicAdapter = new AnthropicAdapter(config.anthropic.apiKey, config.anthropic.model);
+        this.adapters.set('claude', anthropicAdapter);
+        this.adapters.set('anthropic', anthropicAdapter);
+        logger.info('Anthropic adapter registered');
+      } catch (error) {
+        logger.error('Failed to register Anthropic adapter:', error);
+      }
     }
 
     // Grok
-    if (config.grok.apiKey) {
+    if (config.grok?.apiKey) {
       try {
         const grokAdapter = new GrokAdapter(
           config.grok.apiKey,

@@ -50,12 +50,16 @@ export class AnthropicAdapter extends BaseAdapter {
           });
 
           const content = response.content[0]?.type === 'text' ? response.content[0].text : '';
-          const tokens = response.usage.input_tokens + response.usage.output_tokens;
+          const inputTokens = response.usage.input_tokens;
+          const outputTokens = response.usage.output_tokens;
+          const tokens = inputTokens + outputTokens;
 
           return {
             content,
             model: this.modelName,
             tokens,
+            inputTokens,
+            outputTokens,
             replyTo: replyTo || [],
             contextUsed: tokens,
           };
