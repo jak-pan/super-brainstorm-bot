@@ -8,7 +8,6 @@
  */
 
 import { execSync } from 'child_process';
-import { readFileSync } from 'fs';
 
 const DOC_FILES = [
   'README.md',
