@@ -175,32 +175,65 @@ function getOpenAIPricing(modelId) {
 
 /**
  * Fetch available models from Anthropic API
- * Anthropic doesn't have a public models endpoint, so we use known current models
+ * Uses the official /v1/models endpoint
+ * Reference: https://docs.claude.com/en/api/models-list
  */
 async function fetchAnthropicModels(apiKey) {
-  try {
-    console.log("📡 Fetching Anthropic models...");
-    // Anthropic doesn't have a public models list endpoint
-    // Use known current models (latest as of November 2025)
-    const knownModels = [
-      "claude-opus-4.1",
-      "claude-sonnet-4.5",
-      "claude-haiku-4.5",
-      "claude-3-5-sonnet-20241022",
-      "claude-3-5-sonnet-20240620",
-      "claude-3-opus-20240229",
-      "claude-3-sonnet-20240229",
-      "claude-3-haiku-20240307",
-    ];
-
+  if (!apiKey) {
     console.log(
-      `✅ Using known Anthropic models: ${knownModels.length} models`
+      "ℹ️  ANTHROPIC_API_KEY not set, using known Anthropic models as fallback"
     );
-    return knownModels.map((id) => ({ id, name: id }));
-  } catch (error) {
-    console.warn(`⚠️  Could not fetch Anthropic models: ${error.message}`);
     // Return known models as fallback
     return [
+      { id: "claude-sonnet-4-20250514", name: "Claude Sonnet 4" },
+      { id: "claude-opus-4.1", name: "Claude Opus 4.1" },
+      { id: "claude-sonnet-4.5", name: "Claude Sonnet 4.5" },
+      { id: "claude-haiku-4.5", name: "Claude Haiku 4.5" },
+      { id: "claude-3-5-sonnet-20241022", name: "Claude 3.5 Sonnet" },
+    ];
+  }
+
+  try {
+    console.log("📡 Fetching models from Anthropic API...");
+    const response = await httpsRequest("https://api.anthropic.com/v1/models", {
+      method: "GET",
+      headers: {
+        "x-api-key": apiKey,
+        "anthropic-version": "2023-06-01",
+      },
+    });
+
+    const models = response.data || [];
+    const claudeModels = models
+      .filter(
+        (m) => m.type === "model" && m.id && m.id.startsWith("claude-")
+      )
+      .map((m) => ({
+        id: m.id,
+        name: m.display_name || m.id,
+        created_at: m.created_at,
+      }));
+
+    if (claudeModels.length > 0) {
+      console.log(`✅ Found ${claudeModels.length} Anthropic models`);
+      return claudeModels;
+    }
+
+    // Fallback to known models if API doesn't return any
+    console.warn("⚠️  No models from API, using known models as fallback");
+    return [
+      { id: "claude-sonnet-4-20250514", name: "Claude Sonnet 4" },
+      { id: "claude-opus-4.1", name: "Claude Opus 4.1" },
+      { id: "claude-sonnet-4.5", name: "Claude Sonnet 4.5" },
+      { id: "claude-haiku-4.5", name: "Claude Haiku 4.5" },
+      { id: "claude-3-5-sonnet-20241022", name: "Claude 3.5 Sonnet" },
+    ];
+  } catch (error) {
+    console.warn(`⚠️  Could not fetch Anthropic models: ${error.message}`);
+    console.warn("   Using known models as fallback");
+    // Return known models as fallback
+    return [
+      { id: "claude-sonnet-4-20250514", name: "Claude Sonnet 4" },
       { id: "claude-opus-4.1", name: "Claude Opus 4.1" },
       { id: "claude-sonnet-4.5", name: "Claude Sonnet 4.5" },
       { id: "claude-haiku-4.5", name: "Claude Haiku 4.5" },
@@ -220,6 +253,7 @@ function getAnthropicPricing(modelId) {
   // Prices are per 1k tokens
   const pricingMap = {
     // Claude 4 series (latest)
+    "claude-sonnet-4-20250514": { input: 0.003, output: 0.015 },
     "claude-opus-4.1": { input: 0.015, output: 0.075 },
     "claude-sonnet-4.5": { input: 0.003, output: 0.015 },
     "claude-haiku-4.5": { input: 0.001, output: 0.005 },
@@ -238,6 +272,13 @@ function getAnthropicPricing(modelId) {
   }
 
   // Pattern matching
+  if (
+    id.includes("sonnet") &&
+    id.includes("4") &&
+    (id.includes("2025") || id.includes("50514"))
+  ) {
+    return pricingMap["claude-sonnet-4-20250514"];
+  }
   if (id.includes("opus") && (id.includes("4") || id.includes("4.1"))) {
     return pricingMap["claude-opus-4.1"];
   }
@@ -412,7 +453,13 @@ function isSmartestModel(provider, modelId, allModelIds) {
     return false;
   }
   if (provider === "anthropic") {
-    // Claude Opus 4.1 is smartest, then Sonnet 4.5, then 3.5 Sonnet
+    // Claude Sonnet 4 (2025) is smartest, then Opus 4.1, then Sonnet 4.5, then 3.5 Sonnet
+    if (
+      id.includes("sonnet") &&
+      id.includes("4") &&
+      (id.includes("2025") || id.includes("50514"))
+    )
+      return true;
     if (id.includes("opus") && (id.includes("4") || id.includes("4.1")))
       return true;
     if (id.includes("sonnet") && (id.includes("4") || id.includes("4.5")))
