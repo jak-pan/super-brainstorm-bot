@@ -47,9 +47,11 @@ export class TLDRBot {
   }
 
   private async updateTLDR(conversation: ConversationState): Promise<void> {
-    const adapter = this.adapterRegistry.getAdapter(this.config.tldr.model);
+    // Use conversation's tldr model or default to Claude Opus 4.1
+    const tldrModel = conversation.tldrModel || "anthropic/claude-opus-4.1";
+    const adapter = this.adapterRegistry.getAdapter(tldrModel);
     if (!adapter) {
-      logger.error(`TLDR adapter ${this.config.tldr.model} not found`);
+      logger.error(`TLDR adapter ${tldrModel} not found`);
       return;
     }
 
@@ -72,8 +74,8 @@ export class TLDRBot {
       scribeContent
     );
 
-    // Update Notion
-    await this.notionService.updateTLDR(summary, keyFindings);
+    // Update Notion (pass conversation for topic identification)
+    await this.notionService.updateTLDR(conversation, summary, keyFindings);
 
     logger.info(`TLDR updated for conversation ${conversation.id}`);
   }

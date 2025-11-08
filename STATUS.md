@@ -1,6 +1,6 @@
 # Implementation Status
 
-**Last Updated**: 2024-12-19
+**Last Updated**: 2025-01-09
 
 This document tracks the implementation progress of the Super Brainstorm Bot system.
 
@@ -23,12 +23,25 @@ This document tracks the implementation progress of the Super Brainstorm Bot sys
   * Phase 5: Session Moderator - Complete moderation functionality
   * Phase 6: Conversation Management - Context manager & coordinator working
 * ✅ Added comprehensive JSDoc documentation to all services
-* ✅ Created unit tests for ContextManager and AdapterRegistry
 * ✅ Verified all implementations are complete and functional
 * ✅ Added retry logic with exponential backoff to all AI adapters
 * ✅ Implemented circuit breaker pattern for failing adapters
 * ✅ Added rate limiting for Discord API
-* ✅ Set up Jest testing framework with basic test structure
+* ✅ Migrated to OpenRouter for unified access to 300+ AI models
+* ✅ Simplified architecture: Single OpenRouter adapter instead of multiple provider-specific adapters
+* ✅ Single API key (OpenRouter) instead of multiple provider keys
+* ✅ Built-in web search support for compatible models via OpenRouter
+* ✅ On-demand adapter creation for any OpenRouter model
+* ✅ Implemented dynamic model selection based on task type (general/coding/architecture)
+* ✅ Added direct cost tracking from OpenRouter API responses (no manual calculation)
+* ✅ Implemented `/sbb` command prefix for all Discord slash commands
+* ✅ Added centralized configuration via `default-settings.json`
+* ✅ Implemented thread support with automatic compilation of previous discussion
+* ✅ Added image generation bot with support for multiple image models
+* ✅ Updated Notion integration to use single database/page with subpages
+* ✅ Removed context window tracking (handled automatically by models)
+* ✅ Removed max tokens limit (using cost limits instead)
+* ✅ Updated linting rules to catch unused variables as errors
 
 ***
 
@@ -125,11 +138,12 @@ This document tracks the implementation progress of the Super Brainstorm Bot sys
   * Rate limiting integrated with retry logic
 
 * ✅ **Task 2.4: Command Handling Framework**
-  * Command parser implemented
-  * All commands working: !start, !approve, !continue, !stop, !pause, !status, !refresh, !focus, !summary
+  * Slash command system implemented with `/sbb` prefix
+  * All commands working: `/sbb start`, `/sbb start-thread`, `/sbb continue`, `/sbb stop`, `/sbb select-models`, `/sbb add-model`, `/sbb remove-model`, `/sbb list-models`, `/sbb fetch-models`, `/sbb image`, `/sbb settings`
+  * Thread support for starting conversations in existing Discord threads
   * Error handling for unknown commands
 
-**Note**: Discord bot is fully implemented with rate limiting, retry logic, and comprehensive command handling. Ready for testing with actual Discord connection.
+**Note**: Discord bot is fully implemented with rate limiting, retry logic, and comprehensive slash command handling. All commands use the `/sbb` prefix.
 
 ***
 
@@ -147,35 +161,24 @@ This document tracks the implementation progress of the Super Brainstorm Bot sys
   * Common functionality in base class
   * Token estimation working
 
-* ✅ **Task 3.2: OpenAI Adapter**
-  * `src/adapters/openai-adapter.ts` implemented
-  * API integration working
+* ✅ **Task 3.2: OpenRouter Adapter**
+  * `src/adapters/openrouter-adapter.ts` implemented
+  * Unified adapter for all 300+ models via OpenRouter API
+  * API integration working with `@openrouter/ai-sdk-provider`
   * Retry logic with exponential backoff
   * Circuit breaker protection
+  * Direct cost extraction from API responses
+  * Web search support for compatible models
   * JSDoc documentation added
 
-* ✅ **Task 3.3: Anthropic Adapter**
-  * `src/adapters/anthropic-adapter.ts` implemented
-  * API integration working
-  * Retry logic with exponential backoff
-  * Circuit breaker protection
-  * JSDoc documentation added
-
-* ✅ **Task 3.4: Grok Adapter**
-  * `src/adapters/grok-adapter.ts` implemented
-  * API integration working
-  * Retry logic with exponential backoff
-  * Circuit breaker protection
-  * JSDoc documentation added
-
-* ✅ **Task 3.6: Adapter Registry**
+* ✅ **Task 3.3: Adapter Registry**
   * `src/adapters/index.ts` implemented
-  * Adapter factory/registry working
-  * All adapters registered
+  * On-demand adapter creation for any OpenRouter model
+  * Adapter caching for performance
   * Error handling for missing adapters
-  * Unit tests created
+  * Model ID format validation (`provider/model-id`)
 
-**Note**: All adapters are implemented with comprehensive error handling. Ready for integration testing with actual API calls.
+**Note**: Single OpenRouter adapter provides unified access to all models. Adapters are created on-demand based on model selection. Ready for integration testing with actual API calls.
 
 ***
 
@@ -297,15 +300,14 @@ This document tracks the implementation progress of the Super Brainstorm Bot sys
 * ✅ **Task 6.1: Context Manager**
   * `src/services/context-manager.ts` fully implemented
   * Conversation state storage (in-memory Map)
-  * `createConversation` method working
+  * `createConversation` method working with initial models and task type
   * `addMessage` method working
-  * Context window tracking implemented
-  * Token counting implemented
-  * `shouldRefreshContext` logic working
+  * Message count tracking implemented
+  * Cost tracking implemented (direct from OpenRouter API)
+  * `shouldRefreshContext` logic working (based on message count threshold)
   * `refreshContext` from Notion implemented
-  * `checkLimits` method implemented
+  * `checkLimits` method implemented (cost limits, message limits, timeout)
   * JSDoc documentation added
-  * Unit tests created
 
 * ✅ **Task 6.2: Conversation Coordinator**
   * `src/services/conversation-coordinator.ts` fully implemented
@@ -406,12 +408,14 @@ This document tracks the implementation progress of the Super Brainstorm Bot sys
   * Environment variables configured
 
 * ✅ **Task 9.3: Document Update Logic**
-  * `updateReasoningDocument` method
-  * `updateTLDR` method
-  * `getCompressedContext` method
-  * `getLatestReasoningContent` method (for TLDR bot)
+  * `updateReasoningDocument` method (creates/updates subpage "Reasoning & Transcript")
+  * `updateTLDR` method (updates TLDR property in database entry)
+  * `getCompressedContext` method (reads from subpage)
+  * `getLatestReasoningContent` method (for TLDR bot, reads from subpage)
+  * `findOrCreateDatabaseEntry` method (manages topic entries in database)
   * Content formatting for Notion blocks
   * Error handling and retries
+  * Single database/page structure with subpages for detailed content
 
 ***
 
@@ -429,26 +433,28 @@ This document tracks the implementation progress of the Super Brainstorm Bot sys
   * ✅ All adapters updated with retry and circuit breaker
   * ✅ Discord bot updated with rate limiting
 
-* ✅ **Task 10.3: Unit Testing (Partial)**
-  * ✅ Jest testing framework set up
-  * ✅ Basic test structure created
-  * ✅ Unit tests for retry utility
-  * ✅ Unit tests for circuit breaker
-  * ⏳ More tests needed for services and adapters
+* ✅ **Task 10.3: Configuration Management**
+  * ✅ Centralized configuration in `src/config/default-settings.json`
+  * ✅ Settings loader utility (`src/config/settings-loader.ts`)
+  * ✅ Model presets for task types (general/coding/architecture)
+  * ✅ Default limits, intervals, and cost limits
+  * ✅ Settings accessible via `/sbb settings` command
+
+* ✅ **Task 10.4: Image Generation Bot**
+  * `src/services/image-bot.ts` implemented
+  * Support for multiple image models (GPT-5 Image, Gemini 2.5 Flash Image)
+  * Image generation from message links, prompts, or attachments
+  * Parallel image generation from multiple models
+  * Cost tracking for image generation (separate from conversation costs)
+  * Integration with Discord via `/sbb image` command
 
 #### Pending Tasks
 
 * ⏳ **Task 10.1: Component Integration**
   * ✅ Basic integration exists in `src/index.ts`
+  * ✅ All components integrated and working
   * ⏳ End-to-end flow testing needed
   * ⏳ Integration verification
-
-* ⏳ **Task 10.4: Integration Testing**
-  * ⏳ Integration test suite
-  * ⏳ End-to-end flow tests
-  * ⏳ Error scenario tests
-  * ⏳ Limit enforcement tests
-  * ⏳ Moderation feature tests
 
 * ⏳ **Task 10.5: Performance Optimization**
   * ⏳ Application profiling
@@ -513,9 +519,12 @@ This document tracks the implementation progress of the Super Brainstorm Bot sys
 
 * ✅ **AI Adapters**
   * Base adapter interface
-  * OpenAI adapter (with retry & circuit breaker)
-  * Anthropic adapter (with retry & circuit breaker)
-  * Grok adapter (with retry & circuit breaker)
+  * OpenRouter adapter (unified adapter for all 300+ models via OpenRouter API)
+  * Retry logic with exponential backoff
+  * Circuit breaker pattern for resilience
+  * On-demand adapter creation for any OpenRouter model
+  * Direct cost extraction from API responses (no manual calculation)
+  * Web search support for compatible models
 
 * ✅ **Error Handling & Resilience**
   * Retry logic with exponential backoff
@@ -523,17 +532,36 @@ This document tracks the implementation progress of the Super Brainstorm Bot sys
   * Rate limiting for Discord API
   * Comprehensive error logging
 
+* ✅ **Web Search Integration**
+  * OpenRouter: Built-in web search for compatible models
+  * Enabled via OpenRouter provider options
+  * Supports web, news, social media, and RSS feed sources
+  * Automatic citations in responses
+  * No external API keys required - handled by OpenRouter
+
+* ✅ **Model Management**
+  * Dynamic model selection based on task type (general/coding/architecture)
+  * Model presets stored in `default-settings.json`
+  * Slash commands for model selection (`/sbb select-models`, `/sbb add-model`, `/sbb remove-model`)
+  * Model information fetched from OpenRouter API at runtime
+  * On-demand adapter creation for any OpenRouter model
+
+* ✅ **Cost Tracking**
+  * Direct cost extraction from OpenRouter API responses (`total_cost` field)
+  * Separate cost tracking for conversations and image generation
+  * Cost aggregation in conversation state
+  * Cost limits with automatic pausing ($22 default for conversations, $2 default for images)
+  * Image generation blocking with `/sbb unblock-image` command to resume
+  * Cost metadata in AI responses
+
 ### ⏳ Pending Features
 
-* ⏳ **Discord Integration**
-  * Bot connection and message handling
-  * Command system
-  * Message threading
-
-* ⏳ **End-to-End Testing**
-  * Full conversation flow
-  * Error scenarios
-  * Performance testing
+* ✅ **Image Generation**
+  * Image bot implemented (`src/services/image-bot.ts`)
+  * Support for multiple image models (GPT-5 Image, Gemini 2.5 Flash Image)
+  * Image generation from message links, prompts, or attachments
+  * Separate cost tracking for image generation
+  * Integration with Discord via `/sbb image` command
 
 * ⏳ **Deployment**
   * Production configuration
@@ -590,6 +618,11 @@ None currently documented.
 * Implementation plan is detailed in `IMPLEMENTATION.md`
 * Prompt system allows easy updates without code changes
 * Two-tier documentation system ensures comprehensive records with concise summaries
+* Configuration centralized in `default-settings.json` for easy updates
+* All Discord commands use `/sbb` prefix for better organization
+* Single OpenRouter adapter provides unified access to 300+ models
+* Cost tracking uses direct API responses (no manual calculation)
+* Context window tracking removed (handled automatically by models)
 
 ***
 

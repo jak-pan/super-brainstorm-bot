@@ -1,0 +1,71 @@
+{
+  "models": {
+    "presets": {
+      "general": {
+        "conversationModels": [
+          "x-ai/grok-code-fast-1",
+          "anthropic/claude-opus-4.1",
+          "anthropic/claude-sonnet-4.5",
+          "google/gemini-2.5-flash",
+          "openai/gpt-5"
+        ],
+        "scribeModel": "openai/gpt-5",
+        "tldrModel": "anthropic/claude-opus-4.1"
+      },
+      "coding": {
+        "conversationModels": [
+          "x-ai/grok-code-fast-1",
+          "anthropic/claude-opus-4.1",
+          "openai/gpt-5-codex",
+          "anthropic/claude-sonnet-4.5"
+        ],
+        "scribeModel": "openai/gpt-5-codex",
+        "tldrModel": "anthropic/claude-opus-4.1"
+      },
+      "architecture": {
+        "conversationModels": [
+          "x-ai/grok-code-fast-1",
+          "anthropic/claude-opus-4.1",
+          "openai/gpt-5-codex",
+          "anthropic/claude-sonnet-4.5"
+        ],
+        "scribeModel": "openai/gpt-5-codex",
+        "tldrModel": "anthropic/claude-opus-4.1"
+      }
+    },
+    "imageModels": ["openai/gpt-5-image", "google/gemini-2.5-flash-image"]
+  },
+  "limits": {
+    "maxMessagesPerConversation": 1000,
+    "maxContextWindowPercent": 80,
+    "contextRefreshThreshold": 50,
+    "conversationTimeoutMinutes": 60,
+    "maxAIResponsesPerTurn": 3,
+    "batchReplyTimeWindowSeconds": 60
+  },
+  "costLimits": {
+    "conversation": 22,
+    "image": 2
+  },
+  "scribe": {
+    "updateInterval": 30
+  },
+  "tldr": {
+    "updateInterval": 300
+  },
+  "sessionPlanner": {
+    "timeoutMinutes": 30,
+    "maxQuestions": 5,
+    "autoStart": false
+  },
+  "moderator": {
+    "checkInterval": 10,
+    "topicDriftThreshold": 0.6,
+    "maxDriftWarnings": 3,
+    "participantBalanceCheck": true,
+    "qualityAssessment": true
+  },
+  "logging": {
+    "level": "info"
+  }
+}

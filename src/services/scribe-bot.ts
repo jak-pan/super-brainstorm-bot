@@ -50,9 +50,11 @@ export class ScribeBot {
   private async updateReasoningDocument(
     conversation: ConversationState
   ): Promise<void> {
-    const adapter = this.adapterRegistry.getAdapter(this.config.scribe.model);
+    // Use conversation's scribe model or default to GPT-5
+    const scribeModel = conversation.scribeModel || "openai/gpt-5";
+    const adapter = this.adapterRegistry.getAdapter(scribeModel);
     if (!adapter) {
-      logger.error(`Scribe adapter ${this.config.scribe.model} not found`);
+      logger.error(`Scribe adapter ${scribeModel} not found`);
       return;
     }
 

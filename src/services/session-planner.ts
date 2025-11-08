@@ -9,7 +9,8 @@ import { PromptLoader } from "../utils/prompt-loader.js";
  */
 export type PlannerCallback = (
   message: string,
-  replyTo?: string
+  replyTo?: string,
+  conversationId?: string
 ) => Promise<void>;
 
 /**
@@ -36,6 +37,7 @@ export class SessionPlanner {
   private config: Config;
   private planningTimeouts: Map<string, NodeJS.Timeout> = new Map();
   private messageCallback?: PlannerCallback;
+  private readonly defaultModel = "anthropic/claude-opus-4.1"; // Default model for session planner
 
   /**
    * Create a new session planner
@@ -103,13 +105,9 @@ export class SessionPlanner {
     conversationId: string,
     initialMessage: Message
   ): Promise<void> {
-    const adapter = this.adapterRegistry.getAdapter(
-      this.config.sessionPlanner.model
-    );
+    const adapter = this.adapterRegistry.getAdapter(this.defaultModel);
     if (!adapter) {
-      logger.error(
-        `Session planner adapter ${this.config.sessionPlanner.model} not found`
-      );
+      logger.error(`Session planner adapter ${this.defaultModel} not found`);
       return;
     }
 
@@ -195,16 +193,11 @@ export class SessionPlanner {
    */
   private async createPlan(
     conversationId: string,
-    // eslint-disable-next-line @typescript-eslint/no-unused-vars
     _contextMessage: Message
   ): Promise<void> {
-    const adapter = this.adapterRegistry.getAdapter(
-      this.config.sessionPlanner.model
-    );
+    const adapter = this.adapterRegistry.getAdapter(this.defaultModel);
     if (!adapter) {
-      logger.error(
-        `Session planner adapter ${this.config.sessionPlanner.model} not found`
-      );
+      logger.error(`Session planner adapter ${this.defaultModel} not found`);
       return;
     }
 
@@ -233,7 +226,7 @@ export class SessionPlanner {
 
       // Post plan for approval
       if (this.messageCallback) {
-        const planText = `**Session Plan** 📋\n\n**Topic:** ${planData.expandedTopic}\n\n**Plan:**\n${planData.plan}\n\n**Parameters:**\n- Max Messages: ${planData.parameters.maxMessages}\n- Max Tokens: ${planData.parameters.maxTokens}\n- Timeout: ${planData.parameters.timeoutMinutes} minutes\n- Context Window: ${planData.parameters.maxContextWindowPercent}%\n\nType \`!start\` or \`!approve\` to begin the conversation.`;
+        const planText = `**Session Plan** 📋\n\n**Topic:** ${planData.expandedTopic}\n\n**Plan:**\n${planData.plan}\n\n**Parameters:**\n- Max Messages: ${planData.parameters.maxMessages}\n- Cost Limit: $${planData.parameters.costLimit}\n- Timeout: ${planData.parameters.timeoutMinutes} minutes\n- Context Window: ${planData.parameters.maxContextWindowPercent}%\n\nType \`/sbb start\` to begin the conversation.`;
         await this.messageCallback(planText);
       }
     } catch (error) {
@@ -350,9 +343,7 @@ export class SessionPlanner {
     const conversation = this.contextManager.getConversation(conversationId);
     if (!conversation || !conversation.moderationState) return;
 
-    const adapter = this.adapterRegistry.getAdapter(
-      this.config.sessionPlanner.model
-    );
+    const adapter = this.adapterRegistry.getAdapter(this.defaultModel);
     if (!adapter) return;
 
     const systemPrompt = PromptLoader.loadPrompt("session-planner-drift.txt", {
@@ -535,9 +526,9 @@ export class SessionPlanner {
     conversation.planningState.plan = "General discussion on the topic.";
     conversation.planningState.parameters = {
       maxMessages: this.config.limits.maxMessagesPerConversation,
-      maxTokens: this.config.limits.maxTokensPerConversation,
       timeoutMinutes: this.config.limits.conversationTimeoutMinutes,
       maxContextWindowPercent: this.config.limits.maxContextWindowPercent,
+      costLimit: this.config.costLimits.conversation,
     };
     conversation.planningState.awaitingApproval = true;
 
@@ -577,7 +568,7 @@ export class SessionPlanner {
     plan: string;
     parameters: {
       maxMessages: number;
-      maxTokens: number;
+      costLimit: number;
       timeoutMinutes: number;
       maxContextWindowPercent: number;
     };
@@ -593,9 +584,9 @@ export class SessionPlanner {
             maxMessages:
               parsed.parameters?.maxMessages ||
               this.config.limits.maxMessagesPerConversation,
-            maxTokens:
-              parsed.parameters?.maxTokens ||
-              this.config.limits.maxTokensPerConversation,
+            costLimit:
+              parsed.parameters?.costLimit ||
+              this.config.costLimits.conversation,
             timeoutMinutes:
               parsed.parameters?.timeoutMinutes ||
               this.config.limits.conversationTimeoutMinutes,
@@ -615,7 +606,7 @@ export class SessionPlanner {
       plan: "",
       parameters: {
         maxMessages: this.config.limits.maxMessagesPerConversation,
-        maxTokens: this.config.limits.maxTokensPerConversation,
+        costLimit: this.config.costLimits.conversation,
         timeoutMinutes: this.config.limits.conversationTimeoutMinutes,
         maxContextWindowPercent: this.config.limits.maxContextWindowPercent,
       },

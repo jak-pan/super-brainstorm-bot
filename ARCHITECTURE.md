@@ -2,7 +2,7 @@
 
 ## Overview
 
-The Super Brainstorm Bot is a Discord-based multi-AI collaboration system that enables multiple AI models (Claude, ChatGPT, and Grok) to engage in collaborative brainstorming sessions with human participants. The system includes intelligent conversation management, context compression, and automatic documentation in Notion.
+The Super Brainstorm Bot is a Discord-based multi-AI collaboration system that enables multiple AI models (including Claude, ChatGPT, Grok, and 300+ others via OpenRouter) to engage in collaborative brainstorming sessions with human participants. The system includes intelligent conversation management, context compression, automatic documentation in Notion, and image generation capabilities.
 
 ## Core Components
 
@@ -18,16 +18,29 @@ The Super Brainstorm Bot is a Discord-based multi-AI collaboration system that e
 
 ### 2. AI Adapter System
 
-* **Purpose**: Abstract interface for different AI providers
-* **Supported Providers**:
-  * OpenAI (ChatGPT)
-  * Anthropic (Claude)
-  * Grok (X/Twitter API)
+* **Purpose**: Unified interface for all AI models via OpenRouter
+* **Provider**: OpenRouter API (https://openrouter.ai)
+* **Supported Models**: 300+ models from multiple providers including:
+  * OpenAI (GPT-4o, GPT-4 Turbo, GPT-3.5, etc.)
+  * Anthropic (Claude 3.5 Sonnet, Claude 3 Opus, etc.)
+  * Grok (Grok-2, Grok-3, etc.)
+  * And 300+ other models from various providers
+* **Implementation**: Single `OpenRouterAdapter` using `@openrouter/ai-sdk-provider`
+* **Model Format**: `"provider/model-id"` (e.g., `"openai/gpt-4o"`, `"anthropic/claude-3-5-sonnet"`)
 * **Responsibilities**:
-  * Standardize API calls across providers
-  * Handle rate limiting
-  * Manage context windows
+  * Standardize API calls across all models using OpenRouter's unified API
+  * Handle rate limiting with circuit breaker pattern
   * Format responses for Discord
+  * Support web search for compatible models
+  * Track token usage and costs (direct from API responses)
+* **Features**:
+  * **Single API Key**: Only one API key needed (OpenRouter) instead of multiple provider keys
+  * **Unified Interface**: Same API for all models regardless of provider
+  * **On-Demand Adapters**: Creates adapters dynamically for any OpenRouter model ID
+  * **Web Search**: Built-in support for models that support web search
+  * **Cost Tracking**: Tracks input/output tokens and calculates costs per model
+  * **High Availability**: Automatic failover and enterprise-grade infrastructure via OpenRouter
+  * **Easy Model Switching**: Change models by simply updating model ID string
 
 ### 3. Conversation Coordinator
 
@@ -36,8 +49,7 @@ The Super Brainstorm Bot is a Discord-based multi-AI collaboration system that e
   * Track conversation threads
   * Manage turn-taking logic
   * Detect when AIs should respond
-  * Handle context window management
-  * Implement conversation limits
+  * Implement conversation limits (cost limits, message limits, timeouts)
   * Queue AI responses
   * Handle AI response failures gracefully
   * Manage conversation timeouts
@@ -47,9 +59,9 @@ The Super Brainstorm Bot is a Discord-based multi-AI collaboration system that e
 * **Purpose**: Manage conversation context and memory
 * **Responsibilities**:
   * Track conversation history
-  * Monitor context window usage
-  * Trigger context refresh from Notion
+  * Monitor message count and trigger context refresh from Notion when threshold is reached
   * Compress context when needed
+  * Manage conversation state and metadata
 
 ### 5. Scribe Bot
 
@@ -78,6 +90,27 @@ The Super Brainstorm Bot is a Discord-based multi-AI collaboration system that e
   * Update Notion TLDR document
   * Highlight key findings and conclusions
 * **Note**: Extracts summaries from Scribe's detailed Notion documentation rather than generating from raw conversation. This creates a two-tier documentation system.
+
+### 7. Image Generation Bot
+
+* **Purpose**: Generate images based on text prompts from TLDR summaries, linked messages, or user-provided prompts
+* **Responsibilities**:
+  * Generate images using multiple image generation models in parallel
+  * Extract prompts from TLDR summaries or linked Discord messages
+  * Support image input via attachments (for future vision model integration)
+  * Use default image models: DALL-E 3 and Gemini 2.5 Flash
+  * Track image generation models as active agents
+  * Handle image generation errors gracefully
+* **Default Models**:
+  * `openai/dall-e-3` - DALL-E 3 for high-quality image generation
+  * `google/gemini-2.0-flash-exp:free` - Gemini 2.5 Flash (if supports image generation)
+* **Features**:
+  * Can be triggered by `/image` slash command
+  * Accepts message links to extract prompts from previous messages
+  * Accepts direct text prompts
+  * Accepts image attachments as reference (future: vision model integration)
+  * Generates multiple images in parallel for diverse outputs
+  * Protected agent (cannot be stopped via `/stop` command)
 
 ### 7. Session Planner Bot (Session Moderator)
 
@@ -115,6 +148,42 @@ The Super Brainstorm Bot is a Discord-based multi-AI collaboration system that e
   * Provide context retrieval API
   * Provide latest reasoning content retrieval (for TLDR bot)
 
+### 9. Web Search Integration
+
+* **Purpose**: Provide real-time web search capabilities to AI agents
+* **Implementation**: Built-in web search support via OpenRouter
+* **Supported Models**: Models that support web search through OpenRouter
+  * See: [OpenRouter Web Search Documentation](https://openrouter.ai/docs/features/web-search)
+  * Includes Grok models and other compatible models
+* **Features**:
+  * Automatic search when supported by the model
+  * Citations included in responses
+  * Multiple data sources (web, social media, news, RSS)
+  * No additional API keys required - handled by OpenRouter
+  * Seamless integration with model responses
+
+### 10. Model Configuration System
+
+* **Purpose**: Model configuration and cost tracking
+* **Responsibilities**:
+  * Maintain model metadata (context windows, pricing, availability)
+  * Track costs for different models
+  * Provide default model selections
+  * Fetch model information from OpenRouter API when needed
+* **Features**:
+  * **OpenRouter Integration**: Uses OpenRouter's unified model format (`provider/model-id`)
+  * **Pricing Information**: Cost data comes directly from OpenRouter API responses (`total_cost` field)
+  * **Default Model Selection**: Configurable defaults per task type (general/coding/architecture) in `default-settings.json`
+  * **Dynamic Model Selection**: Models selected based on task type with presets stored in `default-settings.json`
+  * **Runtime Fetching**: Model information can be fetched directly from OpenRouter API when needed
+* **Model Format**: OpenRouter uses `"provider/model-id"` format (e.g., `"openai/gpt-4o"`)
+* **Files**:
+  * `src/config/default-settings.json`: Default model presets, limits, and intervals
+  * `src/config/settings-loader.ts`: Settings loader utility
+* **Data Source**: All model information (pricing, availability) comes from OpenRouter's `/api/v1/models` endpoint
+* **Reference**: https://openrouter.ai/docs/api-reference/models/get-models
+* **Note**: Model information is fetched directly from OpenRouter API at runtime. Default model presets are stored in `default-settings.json` and can be modified via `/sbb settings` command
+
 ## System Architecture
 
 ```mermaid
@@ -133,9 +202,10 @@ graph TB
     ConvCoord -->|Trigger AI| AIAdapter[AI Adapter System]
     ConvCoord -->|Notify New Messages| SessionPlanner
     
-    AIAdapter -->|Claude| ClaudeAPI[Anthropic API]
-    AIAdapter -->|ChatGPT| OpenAIAPI[Open AI API]
-    AIAdapter -->|Grok| GrokAPI[Grok API]
+    AIAdapter -->|All Models| OpenRouterAPI[OpenRouter API]
+    OpenRouterAPI -->|Routes to| OpenAIAPI[OpenAI]
+    OpenRouterAPI -->|Routes to| ClaudeAPI[Anthropic]
+    OpenRouterAPI -->|Routes to| GrokAPI[xAI/Grok]
     
     ConvCoord -->|Send Response| BotCore
     SessionPlanner -->|Moderation Messages| BotCore
@@ -143,11 +213,13 @@ graph TB
     
     ConvCoord -->|Notify| Scribe[Scribe Bot]
     ConvCoord -->|Notify| TLDR[TLDR Bot]
+    BotCore -->|Trigger| ImageBot[Image Bot]
     
     Scribe -->|Read Context| ContextMgr
     Scribe -->|Update Detailed Docs| Notion[Notion API]
     TLDR -->|Read Detailed Docs| Notion
     TLDR -->|Update Summary| Notion
+    ImageBot -->|Generate Images| OpenRouterAPI
     
     ContextMgr -->|Refresh| Notion
     Notion -->|Return Context| ContextMgr
@@ -158,6 +230,7 @@ graph TB
     style AIAdapter fill:#e8f5e9
     style Scribe fill:#fce4ec
     style TLDR fill:#f3e5f5
+    style ImageBot fill:#e1bee7
     style Notion fill:#fff9c4
 ```
 
@@ -205,8 +278,8 @@ sequenceDiagram
     Bot->>Coord: Conversation ready
     
     Note over Coord: Active Conversation Phase
-    Coord->>Context: Check context window
-    Context->>Notion: Fetch compressed context (if needed)
+    Coord->>Context: Check message count threshold
+    Context->>Notion: Fetch compressed context (if threshold reached)
     Notion-->>Context: Return context
     Context-->>Coord: Context ready
     
@@ -272,39 +345,24 @@ classDiagram
         +getModelName() string
     }
     
-    class OpenAIAdapter {
-        -api Key: string
-        -model: string
+    class OpenRouterAdapter {
+        -apiKey: string
+        -modelId: string
+        -openrouter: OpenRouterProvider
         +generateResponse()
         +checkContextWindow()
     }
     
-    class AnthropicAdapter {
-        -api Key: string
-        -model: string
-        +generateResponse()
-        +checkContextWindow()
-    }
-    
-    class GrokAdapter {
-        -api Key: string
-        -model: string
-        +generateResponse()
-        +checkContextWindow()
-    }
-    
-    AIAdapter <|.. OpenAIAdapter
-    AIAdapter <|.. AnthropicAdapter
-    AIAdapter <|.. GrokAdapter
+    AIAdapter <|.. OpenRouterAdapter
 ```
 
 ## Context Management Flow
 
 ```mermaid
 flowchart TD
-    Start[New Message/Response] --> CheckContext{Context Window Usage}
-    CheckContext -->|> 50%| FetchNotion[Fetch Compressed Context from Notion]
-    CheckContext -->|<= 50%| UseCurrent[Use Current Context]
+    Start[New Message/Response] --> CheckMessageCount{Message Count Threshold}
+    CheckMessageCount -->|> Threshold| FetchNotion[Fetch Compressed Context from Notion]
+    CheckMessageCount -->|<= Threshold| UseCurrent[Use Current Context]
     
     FetchNotion --> MergeContext[Merge Notion Context with Recent Messages]
     UseCurrent --> AddMessage[Add New Message to Context]
@@ -395,7 +453,7 @@ flowchart TD
     ParseResponse --> AssessParams
     
     AssessParams --> EstimateComplexity[Estimate Conversation Complexity]
-    EstimateComplexity --> CalculateParams[Calculate Parameters: Max Messages, Max Tokens, Timeout, Context Window]
+    EstimateComplexity --> CalculateParams[Calculate Parameters: Max Messages, Timeout, Cost Limit]
     
     CalculateParams --> CreatePlan[Create Conversation Plan via AI]
     CreatePlan --> ExpandMessage[Expand on Original Message via AI]
@@ -514,8 +572,8 @@ flowchart TD
 * **Limit Management**: Actively monitors and enforces:
   * Time limits (conversation timeout)
   * Message count limits
-  * Token usage limits
-  * Context window usage
+  * Cost limits (conversation and image generation)
+  * Timeout limits
 * **Quality Assessment**: Before stopping, evaluates:
   * Goals achieved vs. original plan
   * Key insights generated
@@ -669,9 +727,9 @@ flowchart TD
     
     CheckLimits --> LimitsOK{Limits OK?}
     LimitsOK -->|No| StopConv[Stop Conversation Notify User]
-    LimitsOK -->|Yes| CheckContext{Context Window Usage?}
+    LimitsOK -->|Yes| CheckMessageCount{Message Count Threshold?}
     
-    CheckContext -->|> Threshold| RefreshContext[Refresh Contextfrom Notion]
+    CheckMessageCount -->|> Threshold| RefreshContext[Refresh Context from Notion]
     CheckContext -->|OK| AddMessage[Add Messageto Context]
     
     RefreshContext --> AddMessage
@@ -857,52 +915,19 @@ DISCORD_BOT_TOKEN=
 DISCORD_GUILD_ID=
 DISCORD_CHANNEL_ID=
 
-# OpenAI
-OPENAI_API_KEY=
-OPENAI_MODEL=gpt-4-turbo-preview
+# OpenRouter (provides access to all AI models)
+OPENROUTER_API_KEY=your_openrouter_api_key_here
+# Get your API key from: https://openrouter.ai/keys
 
-# Anthropic
-ANTHROPIC_API_KEY=
-ANTHROPIC_MODEL=claude-3-opus-20240229
-
-# Grok
-GROK_API_KEY=
-GROK_MODEL=grok-beta
-
-# Notion
+# Notion (required)
+# Single database/page ID that hosts all topics as entries
+# Each entry contains: Topic name, TLDR content
+# Each entry has a subpage: "Reasoning & Transcript" with detailed reasoning
 NOTION_API_KEY=
-NOTION_REASONING_PAGE_ID=
-NOTION_TLDR_PAGE_ID=
+NOTION_PAGE_ID=
 
-# Conversation Limits
-MAX_MESSAGES_PER_CONVERSATION=1000
-MAX_TOKENS_PER_CONVERSATION=5000000
-MAX_CONTEXT_WINDOW_PERCENT=80
-CONTEXT_REFRESH_THRESHOLD=50
-CONVERSATION_TIMEOUT_MINUTES=60
-MAX_AI_RESPONSES_PER_TURN=3
-BATCH_REPLY_TIME_WINDOW_SECONDS=60
-
-# Scribe Configuration
-SCRIBE_UPDATE_INTERVAL=60 # seconds
-SCRIBE_MODEL=chatgpt # Which AI to use as scribe
-
-# TLDR Configuration
-TLDR_UPDATE_INTERVAL=600 # seconds
-TLDR_MODEL=chatgpt # Which AI to use for TLDR
-
-# Session Planner Configuration
-SESSION_PLANNER_MODEL=claude # Which AI to use as session planner
-SESSION_PLANNER_TIMEOUT_MINUTES=30 # Timeout for planning phase
-SESSION_PLANNER_MAX_QUESTIONS=5 # Maximum clarifying questions to ask
-SESSION_PLANNER_AUTO_START=false # Auto-start without approval (for testing)
-
-# Session Moderator Configuration
-MODERATOR_CHECK_INTERVAL=10 # Check for topic drift every N messages
-MODERATOR_TOPIC_DRIFT_THRESHOLD=0.6 # Semantic similarity threshold (0-1)
-MODERATOR_MAX_DRIFT_WARNINGS=3 # Max redirects before considering stopping
-MODERATOR_PARTICIPANT_BALANCE_CHECK=true # Monitor participant message balance
-MODERATOR_QUALITY_ASSESSMENT=true # Assess conversation quality before stopping
+# Logging (optional)
+LOG_LEVEL=info
 ```
 
 ## API Integrations
@@ -916,24 +941,24 @@ MODERATOR_QUALITY_ASSESSMENT=true # Assess conversation quality before stopping
   * Rich embeds
   * Rate limiting handling
 
-### OpenAI API
+### OpenRouter API
 
-* **Endpoint**: `https://api.openai.com/v1/chat/completions`
-* **Model**: gpt-4-turbo-preview or gpt-4
-* **Context Window**: 128k tokens
-
-### Anthropic API
-
-* **Endpoint**: `https://api.anthropic.com/v1/messages`
-* **Model**: claude-3-opus-20240229 or claude-3-sonnet
-* **Context Window**: 200k tokens
-
-### Grok API
-
-* **Endpoint**: `https://api.x.ai/v1/chat/completions` (verify actual endpoint)
-* **Model**: grok-beta
-* **Context Window**: Verify with API docs
-* **Note**: May require X/Twitter API access or separate xAI API access
+* **Endpoint**: `https://openrouter.ai/api/v1/chat/completions`
+* **Authentication**: Bearer token (OpenRouter API key)
+* **Model Format**: `"provider/model-id"` (e.g., `"openai/gpt-4o"`, `"anthropic/claude-3-5-sonnet"`)
+* **Supported Models**: 300+ models from multiple providers
+* **Documentation**: https://openrouter.ai/docs/api-reference/overview
+* **Benefits**:
+  * Single API key for all models
+  * Unified interface across providers
+  * Automatic failover and high availability
+  * Built-in web search support for compatible models
+  * Transparent pricing and cost tracking
+* **Example Models**:
+  * OpenAI: `openai/gpt-4o`, `openai/gpt-4-turbo`, `openai/gpt-3.5-turbo`
+  * Anthropic: `anthropic/claude-3-5-sonnet`, `anthropic/claude-3-opus`
+  * Grok: `x-ai/grok-2`, `x-ai/grok-beta`
+  * See full list: https://openrouter.ai/models
 
 ### Notion API
 
@@ -963,10 +988,9 @@ MODERATOR_QUALITY_ASSESSMENT=true # Assess conversation quality before stopping
 ### Phase 3: AI Adapter System
 
 1. Create AI adapter interface
-2. Implement OpenAI adapter
-3. Implement Anthropic adapter
-4. Implement Grok adapter
-5. Add adapter factory/registry
+2. Implement OpenRouter adapter (unified adapter for all models)
+3. Add adapter factory/registry with on-demand adapter creation
+4. Configure default models for each provider type
 
 ### Phase 4: Session Planner Bot (Session Moderator)
 
@@ -999,10 +1023,10 @@ MODERATOR_QUALITY_ASSESSMENT=true # Assess conversation quality before stopping
 
 ### Phase 6: Context Management
 
-1. Implement context window tracking
+1. Implement message count tracking
 2. Create context compression logic
 3. Implement Notion context retrieval
-4. Add context refresh triggers
+4. Add context refresh triggers (based on message count threshold)
 
 ### Phase 7: Scribe Bot
 
@@ -1290,35 +1314,107 @@ flowchart TD
 
 ## Performance Considerations
 
-* **Async Operations**: Scribe and TLDR run asynchronously, never block conversation flow
+* **Async Operations**: Scribe, TLDR, and Image Bot run asynchronously, never block conversation flow
 * **Batch Updates**: Batch Notion updates when possible (group multiple changes)
 * **Caching**: Cache context compressions and Notion content
 * **Connection Pooling**: Implement connection pooling for all API clients
 * **Token Monitoring**: Track token usage per conversation and provider
 * **Queue Management**: Use priority queues for AI responses (user messages > AI responses)
-* **Parallel Processing**: Process multiple AI responses in parallel when possible
+* **Parallel Processing**: Process multiple AI responses and images in parallel when possible
 * **Debouncing**: Debounce Scribe updates to avoid excessive Notion API calls
+
+## Thread Support
+
+* **Thread Conversations**: Conversations can run in any Discord thread within the configured server
+* **Automatic Thread Detection**: Bot automatically detects when messages are in threads
+* **Thread Compilation**: When starting a conversation in a thread with `/start-thread`, the bot:
+  * Fetches all previous messages from the thread
+  * Compiles them using Scribe and TLDR bots
+  * Creates a conversation context from the compiled discussion
+  * Allows models to join with full context of previous discussion
+* **Thread Tracking**: Thread information is stored in conversation state (`threadId`, `isThread`)
+* **New Topics**: For new topics, manager starts a fresh thread automatically
+
+## Cost Management
+
+* **Cost Limits**: Each conversation has a configurable cost limit (default: $22 USD for conversations, $2 USD for image generation)
+* **Automatic Pausing**: Conversations automatically pause when cost limit is reached
+* **Cost Tracking**:
+  * Tracks total cost per conversation
+  * Tracks cost per model
+  * Tracks input/output tokens per model
+  * Displays cost information in responses and status commands
+* **Cost Calculation**: Uses OpenRouter model pricing (fetched dynamically or fallback pricing)
+* **Resume Protection**: `/continue` command checks cost limit before resuming paused conversations
+
+## Agent Management
+
+* **Active Agent Tracking**: System tracks which agents were actually launched during conversation
+  * Stored in `conversation.activeAgents` array
+  * Updated when agents generate responses
+  * Used to determine which agents can be stopped
+* **Agent Stopping**:
+  * `/stop agent:<model-id>` - Stop a specific agent that was launched
+  * `/stop agent:all` - Stop all non-protected agents
+  * Only agents in `activeAgents` can be stopped (prevents stopping agents that were never started)
+* **Protected Agents**: Manager, Scribe, TLDR, and Image Bot cannot be stopped (required for system operation)
+* **Disabled Agents**: Tracked in `conversation.disabledAgents` array
+  * Filtered out during response generation
+  * Can be re-enabled by removing from disabled list (future feature)
 
 ## Conversation Control Commands
 
-### User Commands
+All commands use the `/sbb` prefix. The bot also processes regular messages in configured channels and threads to continue conversations.
 
-* `!start` or `!approve` - Approve the session plan and start the conversation (planning phase only)
-* `!continue` - Resume a paused conversation
-* `!stop` - Stop the current conversation (can be used by moderator or user)
-* `!pause` - Pause the conversation temporarily
-* `!explore <topic>` - Explore a new subtopic
-* `!status` - Check conversation status and limits
-* `!refresh` - Force context refresh from Notion
-* `!focus` - Request moderator to refocus conversation (if off-topic)
-* `!summary` - Request conversation summary (moderator may auto-generate at end)
+#### Conversation Management
 
-### Admin Commands
+* `/sbb start [topic]` - Start a new conversation (creates a new thread)
+* `/sbb start-thread [topic]` - Start a conversation in the current thread
+  * Compiles previous discussion using Scribe and TLDR
+  * Automatically detects task type and selects appropriate models
+  * Sets $22 cost limit for conversations and $2 for images by default (configurable in `default-settings.json`)
+* `/sbb continue` - Continue a paused conversation
+  * Checks cost limit before resuming
+  * Shows current cost vs limit
 
-* `!config <setting> <value>` - Update configuration
-* `!enable <ai>` - Enable specific AI model
-* `!disable <ai>` - Disable specific AI model
-* `!reset` - Reset conversation limits
+#### Model Management
+
+* `/sbb select-models [task-type] [models] [scribe-model] [tldr-model]` - Select AI models for the conversation
+  * `task-type`: Optional. Choose from "general", "coding", or "architecture" to auto-select models
+  * `models`: Optional. Comma-separated list of model IDs (e.g., "openai/gpt-5,anthropic/claude-opus-4.1")
+  * `scribe-model`: Optional. Override Scribe bot model
+  * `tldr-model`: Optional. Override TLDR bot model
+* `/sbb add-model <model-id>` - Add a model to the current conversation
+* `/sbb remove-model <model-id>` - Remove a model from the current conversation
+* `/sbb list-models` - List all models in the current conversation
+* `/sbb fetch-models [provider]` - Fetch available models from OpenRouter API (optionally filtered by provider)
+
+#### Agent Control
+
+* `/sbb stop <agent>` - Stop a specific agent or all agents
+  * `agent`: Model ID of the agent to stop, or "all" to stop all agents
+  * Cannot stop manager, scribe, tldr, or image agents (protected)
+  * Only stops agents that were actually launched (tracked in `activeAgents`)
+
+#### Image Generation
+
+* `/sbb image [message-link] [prompt] [attachment]` - Generate images from a message link, prompt, or attachment
+  * `message-link`: Optional. Link to a Discord message to use as prompt (extracts content automatically)
+  * `prompt`: Optional. Direct text prompt for image generation
+  * `attachment`: Optional. Image attachment to use as reference
+  * Default models: GPT-5 Image and Gemini 2.5 Flash Image (configurable in `default-settings.json`)
+  * Generates multiple images in parallel
+  * Separate cost tracking for image generation
+  * Image generation is automatically blocked when cost limit ($2 default) is reached
+* `/sbb unblock-image` - Unblock image generation if it was blocked due to cost limit
+  * Shows current cost vs limit
+  * Allows resuming image generation after being blocked
+
+#### Settings
+
+* `/sbb settings` - View and modify bot settings (default models, limits, intervals)
+  * Settings are stored in `src/config/default-settings.json`
+  * Can be modified interactively via Discord command (future enhancement)
 
 ## Implementation Guide
 

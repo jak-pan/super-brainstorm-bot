@@ -26,9 +26,7 @@ superbrainstormbot/
 │   │   └── conversation-coordinator.txt
 │   ├── adapters/
 │   │   ├── base-adapter.ts          # Base adapter interface
-│   │   ├── openai-adapter.ts        # OpenAI implementation
-│   │   ├── anthropic-adapter.ts     # Anthropic implementation
-│   │   ├── grok-adapter.ts          # Grok implementation
+│   │   ├── openrouter-adapter.ts    # OpenRouter implementation (unified for all models)
 │   │   └── index.ts                 # Adapter registry
 │   ├── bot/
 │   │   └── discord-bot.ts          # Discord bot core
@@ -348,7 +346,7 @@ export abstract class BaseAdapter implements AIAdapter {
 }
 ```
 
-#### Task 3.2: OpenAI Adapter
+#### Task 3.2: OpenRouter Adapter
 
 **Priority**: Critical\
 **Estimated Time**: 4-5 hours\
@@ -356,120 +354,54 @@ export abstract class BaseAdapter implements AIAdapter {
 
 **Steps**:
 
-1. Install OpenAI SDK: `npm install openai`
-2. Create `src/adapters/openai-adapter.ts`
-3. Implement API client initialization
-4. Implement `generateResponse` method
-5. Handle rate limiting and retries
-6. Implement token counting (use `tiktoken`)
-7. Format responses for Discord
+1. Install OpenRouter SDK: `npm install @openrouter/ai-sdk-provider`
+2. Create `src/adapters/openrouter-adapter.ts`
+3. Implement OpenRouter provider using `createOpenRouter`
+4. Support model ID format: `"provider/model-id"` (e.g., `"openai/gpt-4o"`)
+5. Implement `generateResponse` method
+6. Handle rate limiting and retries with circuit breaker
+7. Implement token counting
+8. Format responses for Discord
 
 **Acceptance Criteria**:
 
-* \[ ] Successfully calls OpenAI API
-* \[ ] Handles rate limits with retries
-* \[ ] Token counting accurate
-* \[ ] Responses formatted correctly
-* \[ ] Error handling comprehensive
+* \[x] Successfully calls OpenRouter API for any model
+* \[x] Handles rate limits with retries
+* \[x] Token counting accurate
+* \[x] Responses formatted correctly
+* \[x] Error handling comprehensive
+* \[x] Supports on-demand model creation
 
 **Technical Details**:
 
-* Use `gpt-4-turbo-preview` or `gpt-4` model
-* Context window: 128k tokens
+* Model format: `"provider/model-id"` (e.g., `"openai/gpt-4o"`, `"anthropic/claude-3-5-sonnet"`)
+* Context window: Varies by model (OpenRouter normalizes this)
 * Implement exponential backoff for retries
-* Use `tiktoken` for accurate token counting
+* Use circuit breaker pattern for resilience
+* See: https://openrouter.ai/docs/api-reference/overview
 
-#### Task 3.3: Anthropic Adapter
-
-**Priority**: Critical\
-**Estimated Time**: 4-5 hours\
-**Dependencies**: Task 3.1
-
-**Steps**:
-
-1. Install Anthropic SDK: `npm install @anthropic-ai/sdk`
-2. Create `src/adapters/anthropic-adapter.ts`
-3. Implement API client
-4. Handle Anthropic-specific message format
-5. Implement response generation
-6. Handle rate limiting
-
-**Acceptance Criteria**:
-
-* \[ ] Successfully calls Anthropic API
-* \[ ] Message format correct (system/user/assistant)
-* \[ ] Rate limiting handled
-* \[ ] Error handling works
-
-**Technical Details**:
-
-* Use `claude-3-opus-20240229` or `claude-3-sonnet`
-* Context window: 200k tokens
-* Different message format than OpenAI
-
-#### Task 3.4: Grok Adapter
-
-**Priority**: High\
-**Estimated Time**: 3-4 hours\
-**Dependencies**: Task 3.1
-
-**Steps**:
-
-1. Research Grok API (verify endpoint and authentication)
-2. Install required SDK or use fetch
-3. Create `src/adapters/grok-adapter.ts`
-4. Implement API client
-5. Handle Grok-specific requirements
-6. Add error handling
-
-**Acceptance Criteria**:
-
-* \[ ] Successfully calls Grok API
-* \[ ] Authentication works
-* \[ ] Responses formatted correctly
-* \[ ] Error handling comprehensive
-
-**Note**: Grok API may require research - verify endpoint and authentication method
-
-#### Task 3.5: Cursor Adapter (Optional)
-
-**Priority**: Low\
-**Estimated Time**: 2-3 hours\
-**Dependencies**: Task 3.1
-
-**Steps**:
-
-1. Research Cursor API availability
-2. If available, implement similar to other adapters
-3. If not available, create placeholder adapter
-4. Document limitations
-
-**Acceptance Criteria**:
-
-* \[ ] Adapter exists (even if placeholder)
-* \[ ] Clearly documented if not functional
-* \[ ] Structure ready for future implementation
-
-#### Task 3.6: Adapter Registry
+#### Task 3.3: Adapter Registry
 
 **Priority**: Critical\
 **Estimated Time**: 2-3 hours\
-**Dependencies**: Tasks 3.2-3.5
+**Dependencies**: Task 3.2
 
 **Steps**:
 
 1. Create `src/adapters/index.ts`
-2. Implement adapter factory/registry
-3. Register all adapters
-4. Add adapter lookup by name
-5. Add enable/disable functionality
+2. Implement adapter registry with OpenRouter
+3. Register default models (OpenAI, Anthropic, Grok) with aliases
+4. Add on-demand adapter creation for any OpenRouter model ID
+5. Handle missing adapters gracefully
+6. Add logging
 
 **Acceptance Criteria**:
 
-* \[ ] Can get adapter by name
-* \[ ] Can enable/disable adapters
-* \[ ] All adapters registered
-* \[ ] Error handling for missing adapters
+* \[x] Registry can create and retrieve adapters
+* \[x] Supports both aliases (`chatgpt`, `claude`) and model IDs (`openai/gpt-4o`)
+* \[x] Creates adapters on-demand for any OpenRouter model
+* \[x] Handles missing adapters gracefully
+* \[x] Provides clear error messages
 
 ### Phase 4: Session Planner Bot (Planning Phase)
 
@@ -1295,13 +1227,11 @@ export class NotionService {
 * \[ ] Message posting & threading
 * \[ ] Command handling framework
 
-**Phase 3: AI Adapter System** (18-24 hours)
+**Phase 3: AI Adapter System** (8-12 hours)
 
-* \[ ] Base adapter interface
-* \[ ] OpenAI adapter
-* \[ ] Anthropic adapter
-* \[ ] Grok adapter
-* \[ ] Adapter registry
+* \[x] Base adapter interface
+* \[x] OpenRouter adapter (unified for all models)
+* \[x] Adapter registry with on-demand creation
 
 **Phase 4: Session Planner (Planning)** (19-25 hours)
 

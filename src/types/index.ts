@@ -3,13 +3,12 @@ export interface ConversationState {
   channelId: string;
   topic: string;
   participants: string[]; // AI model names + user IDs
-  selectedModels: string[]; // Selected AI models for this conversation
+  selectedModels: string[]; // Selected AI models for this conversation (OpenRouter model IDs)
+  taskType?: 'general' | 'coding' | 'architecture'; // Detected or user-selected task type
+  scribeModel?: string; // Override scribe model for this conversation
+  tldrModel?: string; // Override TLDR model for this conversation
   messages: Message[];
-  contextWindow: {
-    current: number;
-    max: number;
-    provider: string;
-  };
+  // Context window is now managed automatically by the AI models
   status: 'planning' | 'active' | 'paused' | 'completed' | 'stopped';
   planningState?: {
     questions: string[];
@@ -17,7 +16,7 @@ export interface ConversationState {
     expandedTopic?: string;
     parameters?: {
       maxMessages: number;
-      maxTokens: number;
+      costLimit: number;
       timeoutMinutes: number;
       maxContextWindowPercent: number;
     };
@@ -43,6 +42,23 @@ export interface ConversationState {
       requestCount: number;
     }>;
   };
+  imageCostTracking?: {
+    totalCost: number;
+    totalImages: number;
+    costsByModel: Record<string, {
+      cost: number;
+      imageCount: number;
+      requestCount: number;
+    }>;
+  };
+  costLimit?: number; // Cost limit in USD for conversation (default: $22)
+  imageCostLimit?: number; // Cost limit in USD for image generation (default: $2)
+  imageGenerationBlocked?: boolean; // Whether image generation is blocked due to cost limit
+  disabledAgents?: string[]; // List of disabled agent model IDs (manager, scribe, tldr, image cannot be disabled)
+  activeAgents?: string[]; // List of agent model IDs that were actually launched (for tracking which can be stopped)
+  imageModels?: string[]; // Image generation models for this conversation
+  threadId?: string; // Discord thread ID if conversation is in a thread
+  isThread?: boolean; // Whether this conversation is in a thread
   createdAt: Date;
   lastActivity: Date;
   messageCount: number;
@@ -90,32 +106,9 @@ export interface AIAdapter {
   estimateTokens(text: string): number;
 }
 
-export interface ModelInfo {
-  id: string;
-  name: string;
-  description: string;
-  contextWindow: number;
-  pricing: {
-    input: number;
-    output: number;
-    unit: string;
-  };
-  smartest: boolean;
-  available: boolean;
-}
-
-export interface ProviderModels {
-  provider: string;
-  models: ModelInfo[];
-  defaultModel: string;
-  smartestModel: string;
-}
-
-export interface ModelsConfig {
-  openai: ProviderModels;
-  anthropic: ProviderModels;
-  grok: ProviderModels;
-}
+// Model configuration types removed - we now use OpenRouter API directly
+// Model selection is done via default-settings.json with OpenRouter model IDs
+// Cost is provided directly by OpenRouter API in the response (total_cost)
 
 export interface Config {
   discord: {
@@ -123,43 +116,32 @@ export interface Config {
     guildId: string;
     channelId: string;
   };
-  openai?: {
-    apiKey?: string;
-    model: string;
-  };
-  anthropic?: {
-    apiKey?: string;
-    model: string;
-  };
-  grok?: {
-    apiKey?: string;
-    model: string;
-    baseUrl: string;
+  openrouter: {
+    apiKey: string;
   };
   notion: {
     apiKey: string;
-    reasoningPageId: string;
-    tldrPageId: string;
+    databaseId: string; // Single database/page ID
   };
   limits: {
     maxMessagesPerConversation: number;
-    maxTokensPerConversation: number;
     maxContextWindowPercent: number;
     contextRefreshThreshold: number;
     conversationTimeoutMinutes: number;
     maxAIResponsesPerTurn: number;
     batchReplyTimeWindowSeconds: number;
   };
+  costLimits: {
+    conversation: number;
+    image: number;
+  };
   scribe: {
     updateInterval: number;
-    model: string;
   };
   tldr: {
     updateInterval: number;
-    model: string;
   };
   sessionPlanner: {
-    model: string;
     timeoutMinutes: number;
     maxQuestions: number;
     autoStart: boolean;
@@ -172,6 +154,6 @@ export interface Config {
     qualityAssessment: boolean;
   };
   logLevel: string;
-  modelsConfig?: ModelsConfig;
+  defaultSettings: import("../config/settings-loader.js").DefaultSettings;
 }
 
