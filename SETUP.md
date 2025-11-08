@@ -186,12 +186,12 @@ npm start
 2. Go to your Discord server and channel
 
 3. Use `/sbb start [topic]` to start a new conversation
-   * **In a channel**: Starts a new conversation immediately
+   * **In a channel**: Starts planning immediately
    * **In a thread**: 
-     * Fetches all previous messages
-     * Compiles them using Scribe (detailed) and TLDR (summary)
-     * Waits for compilation to complete
-     * Starts planning with the compiled context
+     * Fetches all previous messages (adds to context)
+     * Starts planning immediately with first message
+     * When you approve (call `/sbb start` again), previous messages are compiled (Scribe + TLDR)
+     * Then conversation starts with all bots active
 
 4. The bot will automatically detect the task type and select appropriate AI models
 
@@ -238,9 +238,9 @@ All commands use the `/sbb` prefix. Once the bot is running, you can use these s
 
 ### Conversation Management
 
-* `/sbb start [topic]` - Start a new conversation
-  * **In a channel**: Starts a new conversation immediately
-  * **In a thread**: Compiles previous discussion first (Scribe + TLDR), then starts planning with compiled context
+* `/sbb start [topic]` - Start a new conversation or approve plan
+  * **First call**: Starts planning immediately (in threads, previous messages added but not compiled)
+  * **Second call** (approval): Compiles previous discussion (Scribe + TLDR) if in thread, then starts conversation
 * `/sbb continue` - Continue a paused conversation
 
 ### Model Management

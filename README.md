@@ -106,13 +106,13 @@ npm run dev
 
 Use `/sbb start` to begin a new conversation. The command automatically detects if you're in a channel or thread:
 
-* **In a channel**: Starts a new conversation immediately
+* **In a channel**: Starts planning immediately
 * **In a thread**: 
-  * Fetches all previous messages from the thread
-  * Compiles them using Scribe (detailed documentation) and TLDR (summary)
-  * Waits for compilation to complete
-  * Starts planning with the compiled context
-  * Session Planner analyzes the compiled discussion and creates a plan
+  * Fetches all previous messages from the thread (adds them to context)
+  * Starts planning immediately with the first message
+  * Session Planner analyzes and creates a plan
+  * When you approve the plan (call `/sbb start` again), previous messages are compiled using Scribe (detailed documentation) and TLDR (summary)
+  * Then the conversation starts with all bots active
 
 The bot will automatically detect the task type and select appropriate AI models.
 
@@ -122,9 +122,9 @@ All commands use the `/sbb` prefix:
 
 #### Conversation Management
 
-* `/sbb start [topic]` - Start a new conversation
-  * **In a channel**: Starts a new conversation immediately
-  * **In a thread**: Compiles previous discussion first (Scribe + TLDR), then starts planning with compiled context
+* `/sbb start [topic]` - Start a new conversation or approve plan
+  * **First call**: Starts planning immediately (in threads, previous messages are added but not compiled yet)
+  * **Second call** (approval): Compiles previous discussion (Scribe + TLDR) if in thread, then starts conversation
 * `/sbb continue` - Continue a paused conversation
 
 #### Model Management
@@ -159,11 +159,13 @@ All commands use the `/sbb` prefix:
 ### How It Works
 
 1. **User starts conversation** with `/sbb start` in a channel or thread
-2. **Thread compilation** (if in thread): Previous messages are compiled by Scribe (detailed) and TLDR (summary) before planning starts
-3. **Task type detection** - Bot automatically detects task type (general/coding/architecture) and selects appropriate models
-4. **Session planning** - Planner analyzes the initial message (or compiled context) and creates a conversation plan
-5. **User approval** - User approves the plan with `/sbb start` (or it auto-starts if configured)
-6. **AI models respond** - Multiple AIs generate responses based on the conversation context
+2. **Planning starts immediately** - Planner analyzes the first message and creates a conversation plan
+3. **Thread messages** (if in thread): Previous messages are added to context but not compiled yet
+4. **Task type detection** - Bot automatically detects task type (general/coding/architecture) and selects appropriate models
+5. **User approval** - User approves the plan by calling `/sbb start` again
+6. **Thread compilation** (on approval, if in thread): Previous messages are compiled by Scribe (detailed) and TLDR (summary)
+7. **Conversation starts** - All bots become active and the conversation begins
+8. **AI models respond** - Multiple AIs generate responses based on the conversation context
 7. **AIs interact** - AIs can respond to each other, building on previous responses
 8. **Scribe bot documents** - The conversation is automatically documented in detail and stored in Notion (async, non-blocking)
 9. **TLDR bot summarizes** - Key findings and summaries are extracted from Scribe's detailed documentation (async, non-blocking)

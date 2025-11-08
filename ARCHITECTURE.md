@@ -1313,14 +1313,11 @@ flowchart TD
 
 * **Thread Conversations**: Conversations can run in any Discord thread within the configured server
 * **Automatic Thread Detection**: Bot automatically detects when messages are in threads
-* **Thread Compilation**: When starting a conversation in a thread with `/sbb start`, the bot:
-  * Fetches all previous messages from the thread
-  * Adds them to the conversation context
-  * Processes them immediately with Scribe (detailed documentation) and TLDR (summary)
-  * Waits for both Scribe and TLDR to complete processing
-  * Starts planning with the compiled context (Scribe's detailed documentation and TLDR summary)
-  * Session Planner analyzes the compiled discussion and creates a plan
+* **Thread Compilation**: When starting a conversation in a thread with `/sbb start`:
+  * **First call**: Fetches all previous messages and adds them to context, then starts planning immediately
+  * **On approval** (second `/sbb start` call): Compiles previous messages with Scribe (detailed documentation) and TLDR (summary)
   * Uses immediate processing methods (`processMessagesImmediate` and `updateImmediate`) that bypass debouncing/throttling
+  * Compilation happens before conversation becomes active, ensuring all bots have compiled context
 * **Thread Tracking**: Thread information is stored in conversation state (`threadId`, `isThread`)
 * **New Topics**: For new topics, manager starts a fresh thread automatically
 
@@ -1357,13 +1354,14 @@ All commands use the `/sbb` prefix. The bot also processes regular messages in c
 
 #### Conversation Management
 
-* `/sbb start [topic]` - Start a new conversation
-  * **In a channel**: Starts a new conversation immediately
-  * **In a thread**: Compiles previous discussion first, then starts planning
-    * Fetches all previous messages from the thread
-    * Processes them immediately with Scribe (detailed documentation) and TLDR (summary)
-    * Waits for compilation to complete (uses immediate processing methods)
-    * Starts planning with the compiled context
+* `/sbb start [topic]` - Start a new conversation or approve plan
+  * **First call**: Starts planning immediately
+    * **In a channel**: Starts planning with the topic
+    * **In a thread**: Fetches previous messages (adds to context), starts planning with first message
+  * **Second call** (approval): Compiles previous discussion if in thread, then starts conversation
+    * Processes previous messages immediately with Scribe (detailed documentation) and TLDR (summary)
+    * Uses immediate processing methods (`processMessagesImmediate` and `updateImmediate`)
+    * Then transitions conversation to active state
   * Automatically detects if you're in a channel or thread
   * Automatically detects task type and selects appropriate models
   * Sets $22 cost limit for conversations and $2 for images by default (configurable in `default-settings.json`)

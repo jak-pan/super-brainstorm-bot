@@ -243,15 +243,47 @@ export class DiscordBot {
         (thread ? thread.name : undefined) ||
         "General Discussion";
 
-      // Check if conversation already exists (for threads)
-      if (isInThread && thread) {
-        const existingConversationId = this.activeConversations.get(thread.id);
-        if (existingConversationId) {
-          await interaction.editReply({
-            content:
-              "A conversation is already active in this thread. Use `/sbb continue` to resume if paused.",
-          });
-          return;
+      // Check if conversation already exists and is in planning (approval case)
+      const lookupId = thread ? thread.id : channelId;
+      const existingConversationId = this.activeConversations.get(lookupId);
+      if (existingConversationId) {
+        const existingConversation = this.contextManager.getConversation(existingConversationId);
+        if (existingConversation) {
+          if (existingConversation.status === "planning") {
+            // This is an approval - compile previous messages if in thread, then start
+            if (isInThread && thread && existingConversation.messages.length > 1) {
+              await interaction.editReply({
+                content: `📝 Compiling previous discussion before starting...`,
+              });
+
+              try {
+                // Process Scribe first (TLDR depends on Scribe's output)
+                await this.scribeBot.processMessagesImmediate(existingConversation);
+                
+                // Then process TLDR (which uses Scribe's output)
+                await this.tldrBot.updateImmediate(existingConversation);
+
+                await interaction.editReply({
+                  content: `✅ Previous discussion compiled. Starting conversation...`,
+                });
+              } catch (error) {
+                logger.error("Error compiling previous discussion:", error);
+                // Continue anyway - compilation is not critical
+              }
+            }
+
+            // Approve and start
+            await this.sessionPlanner.approveAndStart(existingConversationId);
+            await interaction.editReply({
+              content: `✅ Conversation started! All participants can now engage.`,
+            });
+            return;
+          } else if (existingConversation.status === "active") {
+            await interaction.editReply({
+              content: "A conversation is already active. Use `/sbb continue` to resume if paused.",
+            });
+            return;
+          }
         }
       }
 
@@ -270,18 +302,14 @@ export class DiscordBot {
         return;
       }
 
-      // If in thread, fetch and add previous messages
+      // If in thread, fetch and add previous messages (but don't compile yet)
       let previousMessagesCount = 0;
       if (isInThread && thread) {
         const previousMessages = await this.fetchThreadMessages(thread);
         previousMessagesCount = previousMessages.length;
 
         if (previousMessages.length > 0) {
-          await interaction.editReply({
-            content: `📝 Loading previous discussion (${previousMessages.length} messages)...`,
-          });
-
-          // Convert and add messages to conversation
+          // Convert and add messages to conversation (for context)
           const appMessages: AppMessage[] = previousMessages.map((msg) => ({
             id: msg.id,
             conversationId,
@@ -296,35 +324,11 @@ export class DiscordBot {
           for (const msg of appMessages) {
             this.contextManager.addMessage(conversationId, msg);
           }
-
-          // Process messages immediately with Scribe and TLDR
-          // Wait for both to complete before proceeding
-          await interaction.editReply({
-            content: `📝 Compiling previous discussion (${previousMessages.length} messages)...`,
-          });
-
-          try {
-            // Process Scribe first (TLDR depends on Scribe's output)
-            await this.scribeBot.processMessagesImmediate(conversation);
-
-            // Then process TLDR (which uses Scribe's output)
-            await this.tldrBot.updateImmediate(conversation);
-
-            // Update status message
-            await interaction.editReply({
-              content: `📝 Previous discussion compiled (${previousMessages.length} messages). Starting planning...`,
-            });
-          } catch (error) {
-            logger.error("Error compiling previous discussion:", error);
-            // Continue anyway - compilation is not critical for starting the conversation
-            await interaction.editReply({
-              content: `⚠️ Note: Some messages may not be fully compiled yet. Starting planning...`,
-            });
-          }
         }
       }
 
-      // Start planning with first message or topic
+      // Start planning immediately with first message or topic
+      // Compilation will happen when user approves the plan
       const firstMessage = conversation.messages[0];
       const plannerInputMessage: AppMessage = firstMessage || {
         id: `start-${Date.now()}`,
@@ -336,7 +340,7 @@ export class DiscordBot {
         timestamp: new Date(),
       };
 
-      // Start the planner
+      // Start the planner immediately
       await this.sessionPlanner.handleInitialMessage(
         conversationId,
         plannerInputMessage
@@ -352,7 +356,7 @@ export class DiscordBot {
 
       const messageInfo =
         previousMessagesCount > 0
-          ? `**Previous Messages:** ${previousMessagesCount} (compiled)\n`
+          ? `**Previous Messages:** ${previousMessagesCount} (will be compiled on approval)\n`
           : "";
 
       const location = isInThread ? "thread" : "channel";
