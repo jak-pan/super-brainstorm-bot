@@ -81,6 +81,12 @@ function getHighestPricing(provider: "openai" | "anthropic" | "grok"): {
   output: number;
 } {
   const pricingData = loadPricingData();
+  if (!pricingData) {
+    // Default fallback
+    return provider === "grok"
+      ? { input: 0.001, output: 0.001 }
+      : { input: 0.003, output: 0.015 };
+  }
   const pricing = pricingData[provider];
   if (!pricing) {
     // Default fallback
@@ -111,7 +117,11 @@ async function fetchOpenAIModels(apiKey?: string) {
     console.log(
       "ℹ️  OPENAI_API_KEY not set, using known OpenAI models as fallback"
     );
-    return loadFallbackModels().openai;
+    const fallback = loadFallbackModels();
+    if (!fallback) {
+      throw new Error("Failed to load fallback models");
+    }
+    return fallback.openai;
   }
 
   try {
@@ -169,10 +179,14 @@ async function fetchOpenAIModels(apiKey?: string) {
  */
 function getOpenAIPricing(modelId: string): { input: number; output: number } {
   const id = modelId.toLowerCase();
-  const pricing = loadPricingData().openai;
+  const pricingData = loadPricingData();
+  if (!pricingData) {
+    return getHighestPricing("openai");
+  }
+  const pricing = pricingData.openai;
 
   // Try exact match first
-  if (pricing[id]) {
+  if (pricing && pricing[id]) {
     return pricing[id];
   }
 
@@ -189,6 +203,9 @@ async function fetchAnthropicModels(apiKey?: string) {
       "ℹ️  ANTHROPIC_API_KEY not set, using known Anthropic models as fallback"
     );
     const fallback = loadFallbackModels();
+    if (!fallback) {
+      throw new Error("Failed to load fallback models");
+    }
     return fallback.anthropic;
   }
 
@@ -233,6 +250,9 @@ async function fetchAnthropicModels(apiKey?: string) {
 
     console.warn("⚠️  No models from API, using known models as fallback");
     const fallback = loadFallbackModels();
+    if (!fallback) {
+      throw new Error("Failed to load fallback models");
+    }
     return fallback.anthropic;
   } catch (error) {
     console.warn(
@@ -242,6 +262,9 @@ async function fetchAnthropicModels(apiKey?: string) {
     );
     console.warn("   Using known models as fallback");
     const fallback = loadFallbackModels();
+    if (!fallback) {
+      throw new Error("Failed to load fallback models");
+    }
     return fallback.anthropic;
   }
 }
@@ -381,6 +404,9 @@ function getAnthropicPricing(modelId: string): {
 } {
   const id = modelId.toLowerCase();
   const pricingData = loadPricingData();
+  if (!pricingData) {
+    return getHighestPricing("anthropic");
+  }
   const pricing = pricingData.anthropic;
 
   // Try exact match
@@ -402,6 +428,9 @@ async function fetchGrokModels(apiKey?: string) {
       "ℹ️  GROK_API_KEY not set, using known Grok models as fallback"
     );
     const fallback = loadFallbackModels();
+    if (!fallback) {
+      throw new Error("Failed to load fallback models");
+    }
     return fallback.grok;
   }
 
@@ -429,6 +458,9 @@ async function fetchGrokModels(apiKey?: string) {
     }
 
     const fallback = loadFallbackModels();
+    if (!fallback) {
+      throw new Error("Failed to load fallback models");
+    }
     return fallback.grok;
   } catch (error) {
     console.warn(
@@ -437,6 +469,9 @@ async function fetchGrokModels(apiKey?: string) {
       }`
     );
     const fallback = loadFallbackModels();
+    if (!fallback) {
+      throw new Error("Failed to load fallback models");
+    }
     return fallback.grok;
   }
 }
@@ -447,6 +482,9 @@ async function fetchGrokModels(apiKey?: string) {
  */
 function getGrokPricing(modelId: string): { input: number; output: number } {
   const pricingData = loadPricingData();
+  if (!pricingData) {
+    return getHighestPricing("grok");
+  }
   const pricing = pricingData.grok;
   if (pricing && pricing[modelId]) {
     return pricing[modelId];
@@ -464,11 +502,11 @@ function getContextWindow(
   modelId: string
 ): number {
   const id = modelId.toLowerCase();
-  const contextWindows = loadContextWindows();
+  const contextWindowsData = loadContextWindows();
 
   // Try exact match first
-  if (contextWindows[provider]?.[id]) {
-    return contextWindows[provider][id];
+  if (contextWindowsData && contextWindowsData[provider]?.[id]) {
+    return contextWindowsData[provider][id];
   }
 
   // Default fallbacks based on provider
