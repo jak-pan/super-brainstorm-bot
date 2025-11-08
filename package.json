@@ -33,6 +33,7 @@
   "author": "",
   "license": "MIT",
   "dependencies": {
+    "@ai-sdk/xai": "^2.0.31",
     "@anthropic-ai/sdk": "^0.68.0",
     "@notionhq/client": "^2.2.15",
     "discord.js": "^14.14.1",

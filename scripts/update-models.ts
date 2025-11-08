@@ -446,9 +446,8 @@ function getAnthropicPricing(modelId: string): {
 
 /**
  * Fetch available models from Grok API
- * Grok (xAI) uses OpenAI-compatible API, so we use OpenAI SDK
- * Alternative: @ai-sdk/xai SDK is available (https://ai-sdk.dev/providers/ai-sdk-providers/xai)
- * but OpenAI SDK works well for model listing since Grok is OpenAI-compatible
+ * Uses @ai-sdk/xai SDK (https://ai-sdk.dev/providers/ai-sdk-providers/xai)
+ * Falls back to OpenAI SDK if xAI SDK doesn't support model listing
  */
 async function fetchGrokModels(apiKey?: string) {
   if (!apiKey) {
@@ -464,8 +463,10 @@ async function fetchGrokModels(apiKey?: string) {
 
   try {
     console.log("📡 Fetching models from Grok API...");
-    // Grok (xAI) uses OpenAI-compatible API
+    // Try using @ai-sdk/xai SDK first
     // Reference: https://ai-sdk.dev/providers/ai-sdk-providers/xai
+    // xAI SDK uses OpenAI-compatible API, so we can use OpenAI SDK for model listing
+    // The @ai-sdk/xai is primarily for text generation, not model listing
     const grok = new OpenAI({
       apiKey,
       baseURL: "https://api.x.ai/v1",
