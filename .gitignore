@@ -32,9 +32,6 @@ Thumbs.db
 coverage/
 .nyc_output
 
-# Docker
-.dockerignore
-
 # Misc
 .cache
 *.tmp
