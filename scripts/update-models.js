@@ -224,7 +224,10 @@ async function fetchAnthropicModels(apiKey) {
  * Since pricing is not available via API, we scrape from https://www.anthropic.com/pricing
  * Returns raw HTML string for parsing
  */
-async function scrapeAnthropicPricingHTML(url = "https://www.anthropic.com/pricing", maxRedirects = 5) {
+async function scrapeAnthropicPricingHTML(
+  url = "https://www.anthropic.com/pricing",
+  maxRedirects = 5
+) {
   if (maxRedirects <= 0) {
     throw new Error("Too many redirects");
   }
@@ -238,7 +241,8 @@ async function scrapeAnthropicPricingHTML(url = "https://www.anthropic.com/prici
         method: "GET",
         headers: {
           "User-Agent": "Mozilla/5.0 (compatible; ModelUpdater/1.0)",
-          "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8",
+          Accept:
+            "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8",
         },
       };
 
@@ -248,8 +252,8 @@ async function scrapeAnthropicPricingHTML(url = "https://www.anthropic.com/prici
           const location = res.headers.location;
           if (location) {
             // Resolve relative URLs
-            const redirectUrl = location.startsWith("http") 
-              ? location 
+            const redirectUrl = location.startsWith("http")
+              ? location
               : `${urlObj.protocol}//${urlObj.hostname}${location}`;
             // Follow redirect recursively
             return scrapeAnthropicPricingHTML(redirectUrl, maxRedirects - 1)
