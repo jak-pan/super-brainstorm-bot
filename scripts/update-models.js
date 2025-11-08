@@ -149,19 +149,24 @@ function getOpenAIPricing(modelId) {
   }
 
   // Pattern matching for variants
-  if (id.includes("gpt-5-pro")) return pricing["gpt-5-pro"] || { input: 0.002, output: 0.008 };
+  if (id.includes("gpt-5-pro"))
+    return pricing["gpt-5-pro"] || { input: 0.002, output: 0.008 };
   if (id.includes("gpt-5") && id.includes("mini"))
     return pricing["gpt-5-mini"] || { input: 0.002, output: 0.008 };
   if (id.includes("gpt-5") && id.includes("nano"))
     return pricing["gpt-5-nano"] || { input: 0.002, output: 0.008 };
-  if (id.includes("gpt-5")) return pricing["gpt-5"] || { input: 0.002, output: 0.008 };
+  if (id.includes("gpt-5"))
+    return pricing["gpt-5"] || { input: 0.002, output: 0.008 };
   if (id.includes("gpt-4o") && id.includes("mini"))
     return pricing["gpt-4o-mini"] || { input: 0.002, output: 0.008 };
-  if (id.includes("gpt-4o")) return pricing["gpt-4o"] || { input: 0.002, output: 0.008 };
-  if (id.includes("gpt-4-turbo")) return pricing["gpt-4-turbo"] || { input: 0.002, output: 0.008 };
+  if (id.includes("gpt-4o"))
+    return pricing["gpt-4o"] || { input: 0.002, output: 0.008 };
+  if (id.includes("gpt-4-turbo"))
+    return pricing["gpt-4-turbo"] || { input: 0.002, output: 0.008 };
   if (id.includes("gpt-4") && !id.includes("turbo") && !id.includes("o"))
     return pricing["gpt-4"] || { input: 0.002, output: 0.008 };
-  if (id.includes("gpt-3.5")) return pricing["gpt-3.5-turbo"] || { input: 0.002, output: 0.008 };
+  if (id.includes("gpt-3.5"))
+    return pricing["gpt-3.5-turbo"] || { input: 0.002, output: 0.008 };
 
   // Default fallback pricing
   return { input: 0.002, output: 0.008 };
@@ -271,20 +276,35 @@ function parseAnthropicPricingFromHTML(html) {
     // Extract pricing information from HTML
     // This is a simplified parser - actual implementation would need to handle
     // the specific HTML structure of Anthropic's pricing page
-    
+
     // Look for pricing patterns in the HTML
     // Example patterns to look for:
     // - "$X.XX per million input tokens"
     // - "$X.XX per million output tokens"
     // - Model names and their associated prices
-    
+
     const pricing = {};
-    
+
     // Regex patterns to extract pricing (adjust based on actual page structure)
     const modelPatterns = [
-      { name: "claude-sonnet-4", patterns: [/sonnet\s*4[^\$]*\$([\d.]+)/gi, /sonnet\s*4[^\$]*\$([\d.]+)/gi] },
-      { name: "claude-opus-4.1", patterns: [/opus\s*4[^\$]*\$([\d.]+)/gi, /opus\s*4[^\$]*\$([\d.]+)/gi] },
-      { name: "claude-haiku-4.5", patterns: [/haiku\s*4[^\$]*\$([\d.]+)/gi, /haiku\s*4[^\$]*\$([\d.]+)/gi] },
+      {
+        name: "claude-sonnet-4",
+        patterns: [
+          /sonnet\s*4[^\$]*\$([\d.]+)/gi,
+          /sonnet\s*4[^\$]*\$([\d.]+)/gi,
+        ],
+      },
+      {
+        name: "claude-opus-4.1",
+        patterns: [/opus\s*4[^\$]*\$([\d.]+)/gi, /opus\s*4[^\$]*\$([\d.]+)/gi],
+      },
+      {
+        name: "claude-haiku-4.5",
+        patterns: [
+          /haiku\s*4[^\$]*\$([\d.]+)/gi,
+          /haiku\s*4[^\$]*\$([\d.]+)/gi,
+        ],
+      },
     ];
 
     // TODO: Implement actual HTML parsing logic here
@@ -313,7 +333,11 @@ async function updateAnthropicPricing() {
       // Update pricing.json with scraped data
       const pricing = loadPricingData();
       pricing.anthropic = { ...pricing.anthropic, ...scrapedPricing };
-      writeFileSync(PRICING_FILE, JSON.stringify(pricing, null, 2) + "\n", "utf-8");
+      writeFileSync(
+        PRICING_FILE,
+        JSON.stringify(pricing, null, 2) + "\n",
+        "utf-8"
+      );
       console.log("✅ Updated Anthropic pricing from scraped data");
     }
   } catch (error) {
@@ -340,7 +364,9 @@ function getAnthropicPricing(modelId) {
     id.includes("4") &&
     (id.includes("2025") || id.includes("50514"))
   ) {
-    return pricing["claude-sonnet-4-20250514"] || { input: 0.003, output: 0.015 };
+    return (
+      pricing["claude-sonnet-4-20250514"] || { input: 0.003, output: 0.015 }
+    );
   }
   if (id.includes("opus") && (id.includes("4") || id.includes("4.1"))) {
     return pricing["claude-opus-4.1"] || { input: 0.003, output: 0.015 };
@@ -355,10 +381,14 @@ function getAnthropicPricing(modelId) {
     return pricing["claude-3-opus-20240229"] || { input: 0.003, output: 0.015 };
   }
   if (id.includes("sonnet")) {
-    return pricing["claude-3-5-sonnet-20241022"] || { input: 0.003, output: 0.015 };
+    return (
+      pricing["claude-3-5-sonnet-20241022"] || { input: 0.003, output: 0.015 }
+    );
   }
   if (id.includes("haiku")) {
-    return pricing["claude-3-haiku-20240307"] || { input: 0.003, output: 0.015 };
+    return (
+      pricing["claude-3-haiku-20240307"] || { input: 0.003, output: 0.015 }
+    );
   }
 
   // Default fallback
@@ -531,6 +561,9 @@ async function updateModels() {
   console.log("🔄 Dynamically fetching and updating models.json...\n");
 
   try {
+    // Try to update Anthropic pricing from web scraping
+    await updateAnthropicPricing();
+
     const openaiKey = process.env.OPENAI_API_KEY;
     const anthropicKey = process.env.ANTHROPIC_API_KEY;
     const grokKey = process.env.GROK_API_KEY;
