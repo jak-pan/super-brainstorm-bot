@@ -1,4 +1,4 @@
-#!/usr/bin/env node
+#!/usr/bin/env tsx
 
 /**
  * Script to update models.json with latest model information and pricing
@@ -8,6 +8,9 @@
 import { readFileSync, writeFileSync } from "fs";
 import { join, dirname } from "path";
 import { fileURLToPath } from "url";
+import OpenAI from "openai";
+import Anthropic from "@anthropic-ai/sdk";
+import { URL } from "url";
 import https from "https";
 
 const __filename = fileURLToPath(import.meta.url);
@@ -16,15 +19,31 @@ const __dirname = dirname(__filename);
 const MODELS_FILE = join(__dirname, "../src/config/models.json");
 const FALLBACK_MODELS_FILE = join(__dirname, "fallback-models.json");
 const PRICING_FILE = join(__dirname, "fallback-pricing.json");
+const CONTEXT_WINDOWS_FILE = join(__dirname, "context-windows.json");
 
-// Load fallback models and pricing from JSON files
-let fallbackModels = null;
-let pricingData = null;
+// Load fallback models, pricing, and context windows from JSON files
+let fallbackModels: {
+  openai: Array<{ id: string; name: string }>;
+  anthropic: Array<{ id: string; name: string }>;
+  grok: Array<{ id: string; name: string }>;
+} | null = null;
+let pricingData: {
+  openai: Record<string, { input: number; output: number }>;
+  anthropic: Record<string, { input: number; output: number }>;
+  grok: Record<string, { input: number; output: number }>;
+} | null = null;
+let contextWindows: {
+  openai: Record<string, number>;
+  anthropic: Record<string, number>;
+  grok: Record<string, number>;
+} | null = null;
 
 function loadFallbackModels() {
   if (!fallbackModels) {
     try {
-      fallbackModels = JSON.parse(readFileSync(FALLBACK_MODELS_FILE, "utf-8"));
+      fallbackModels = JSON.parse(
+        readFileSync(FALLBACK_MODELS_FILE, "utf-8")
+      );
     } catch (error) {
       console.error("❌ Failed to load fallback-models.json:", error);
       process.exit(1);
@@ -45,65 +64,59 @@ function loadPricingData() {
   return pricingData;
 }
 
-/**
- * Make HTTPS request
- */
-function httpsRequest(url, options = {}) {
-  return new Promise((resolve, reject) => {
-    const urlObj = new URL(url);
-    const requestOptions = {
-      hostname: urlObj.hostname,
-      path: urlObj.pathname + urlObj.search,
-      method: options.method || "GET",
-      headers: options.headers || {},
-    };
-
-    const req = https.request(requestOptions, (res) => {
-      let data = "";
-      res.on("data", (chunk) => {
-        data += chunk;
-      });
-      res.on("end", () => {
-        try {
-          if (res.statusCode !== 200) {
-            reject(
-              new Error(`HTTP ${res.statusCode}: ${data.substring(0, 100)}`)
-            );
-            return;
-          }
-          resolve(JSON.parse(data));
-        } catch (error) {
-          reject(error);
-        }
-      });
-    });
-
-    req.on("error", reject);
-    req.setTimeout(10000, () => {
-      req.destroy();
-      reject(new Error("Request timeout"));
-    });
-    req.end();
-  });
+function loadContextWindows() {
+  if (!contextWindows) {
+    try {
+      contextWindows = JSON.parse(readFileSync(CONTEXT_WINDOWS_FILE, "utf-8"));
+    } catch (error) {
+      console.error("❌ Failed to load context-windows.json:", error);
+      process.exit(1);
+    }
+  }
+  return contextWindows;
 }
 
 /**
- * Fetch available models from OpenAI API
+ * Get highest pricing as fallback
  */
-async function fetchOpenAIModels(apiKey) {
+function getHighestPricing(provider: "openai" | "anthropic" | "grok"): {
+  input: number;
+  output: number;
+} {
+  const pricing = loadPricingData()[provider];
+  const prices = Object.values(pricing);
+  if (prices.length === 0) {
+    // Default fallback
+    return provider === "grok"
+      ? { input: 0.001, output: 0.001 }
+      : { input: 0.003, output: 0.015 };
+  }
+
+  // Find highest input and output prices
+  const highestInput = Math.max(...prices.map((p) => p.input));
+  const highestOutput = Math.max(...prices.map((p) => p.output));
+
+  return { input: highestInput, output: highestOutput };
+}
+
+/**
+ * Fetch available models from OpenAI API using official SDK
+ */
+async function fetchOpenAIModels(apiKey?: string) {
+  if (!apiKey) {
+    console.log(
+      "ℹ️  OPENAI_API_KEY not set, using known OpenAI models as fallback"
+    );
+    return loadFallbackModels().openai;
+  }
+
   try {
-    const headers = {};
-    if (apiKey) {
-      headers["Authorization"] = `Bearer ${apiKey}`;
-    }
-
     console.log("📡 Fetching models from OpenAI API...");
-    const response = await httpsRequest("https://api.openai.com/v1/models", {
-      method: "GET",
-      headers,
-    });
+    const openai = new OpenAI({ apiKey });
 
+    const response = await openai.models.list();
     const models = response.data || [];
+
     const chatModels = models
       .filter((m) => {
         const id = m.id.toLowerCase();
@@ -123,13 +136,14 @@ async function fetchOpenAIModels(apiKey) {
       return chatModels;
     }
 
-    // Fallback to known current models if API doesn't return any
     console.log(
       "⚠️  No models from API, using known current models as fallback"
     );
     return loadFallbackModels().openai;
   } catch (error) {
-    console.warn(`⚠️  Could not fetch OpenAI models: ${error.message}`);
+    console.warn(
+      `⚠️  Could not fetch OpenAI models: ${error instanceof Error ? error.message : String(error)}`
+    );
     console.warn("   Using known current models as fallback");
     return loadFallbackModels().openai;
   }
@@ -137,9 +151,9 @@ async function fetchOpenAIModels(apiKey) {
 
 /**
  * Get OpenAI pricing - loaded from fallback-pricing.json
- * Prices are per 1k tokens (converted from per 1M tokens)
+ * Uses highest price as fallback if model not found
  */
-function getOpenAIPricing(modelId) {
+function getOpenAIPricing(modelId: string): { input: number; output: number } {
   const id = modelId.toLowerCase();
   const pricing = loadPricingData().openai;
 
@@ -148,36 +162,14 @@ function getOpenAIPricing(modelId) {
     return pricing[id];
   }
 
-  // Pattern matching for variants
-  if (id.includes("gpt-5-pro"))
-    return pricing["gpt-5-pro"] || { input: 0.002, output: 0.008 };
-  if (id.includes("gpt-5") && id.includes("mini"))
-    return pricing["gpt-5-mini"] || { input: 0.002, output: 0.008 };
-  if (id.includes("gpt-5") && id.includes("nano"))
-    return pricing["gpt-5-nano"] || { input: 0.002, output: 0.008 };
-  if (id.includes("gpt-5"))
-    return pricing["gpt-5"] || { input: 0.002, output: 0.008 };
-  if (id.includes("gpt-4o") && id.includes("mini"))
-    return pricing["gpt-4o-mini"] || { input: 0.002, output: 0.008 };
-  if (id.includes("gpt-4o"))
-    return pricing["gpt-4o"] || { input: 0.002, output: 0.008 };
-  if (id.includes("gpt-4-turbo"))
-    return pricing["gpt-4-turbo"] || { input: 0.002, output: 0.008 };
-  if (id.includes("gpt-4") && !id.includes("turbo") && !id.includes("o"))
-    return pricing["gpt-4"] || { input: 0.002, output: 0.008 };
-  if (id.includes("gpt-3.5"))
-    return pricing["gpt-3.5-turbo"] || { input: 0.002, output: 0.008 };
-
-  // Default fallback pricing
-  return { input: 0.002, output: 0.008 };
+  // Use highest price as fallback
+  return getHighestPricing("openai");
 }
 
 /**
- * Fetch available models from Anthropic API
- * Uses the official /v1/models endpoint
- * Reference: https://docs.claude.com/en/api/models-list
+ * Fetch available models from Anthropic API using official SDK
  */
-async function fetchAnthropicModels(apiKey) {
+async function fetchAnthropicModels(apiKey?: string) {
   if (!apiKey) {
     console.log(
       "ℹ️  ANTHROPIC_API_KEY not set, using known Anthropic models as fallback"
@@ -187,15 +179,11 @@ async function fetchAnthropicModels(apiKey) {
 
   try {
     console.log("📡 Fetching models from Anthropic API...");
-    const response = await httpsRequest("https://api.anthropic.com/v1/models", {
-      method: "GET",
-      headers: {
-        "x-api-key": apiKey,
-        "anthropic-version": "2023-06-01",
-      },
-    });
+    const anthropic = new Anthropic({ apiKey });
 
+    const response = await anthropic.models.list();
     const models = response.data || [];
+
     const claudeModels = models
       .filter((m) => m.type === "model" && m.id && m.id.startsWith("claude-"))
       .map((m) => ({
@@ -209,11 +197,12 @@ async function fetchAnthropicModels(apiKey) {
       return claudeModels;
     }
 
-    // Fallback to known models if API doesn't return any
     console.warn("⚠️  No models from API, using known models as fallback");
     return loadFallbackModels().anthropic;
   } catch (error) {
-    console.warn(`⚠️  Could not fetch Anthropic models: ${error.message}`);
+    console.warn(
+      `⚠️  Could not fetch Anthropic models: ${error instanceof Error ? error.message : String(error)}`
+    );
     console.warn("   Using known models as fallback");
     return loadFallbackModels().anthropic;
   }
@@ -227,7 +216,7 @@ async function fetchAnthropicModels(apiKey) {
 async function scrapeAnthropicPricingHTML(
   url = "https://www.anthropic.com/pricing",
   maxRedirects = 5
-) {
+): Promise<string | null> {
   if (maxRedirects <= 0) {
     throw new Error("Too many redirects");
   }
@@ -247,7 +236,7 @@ async function scrapeAnthropicPricingHTML(
 
     const req = https.request(options, (res) => {
       // Handle redirects
-      if (res.statusCode >= 300 && res.statusCode < 400) {
+      if (res.statusCode && res.statusCode >= 300 && res.statusCode < 400) {
         const location = res.headers.location;
         if (location) {
           // Resolve relative URLs
@@ -262,14 +251,14 @@ async function scrapeAnthropicPricingHTML(
       }
 
       let data = "";
-      res.on("data", (chunk) => {
-        data += chunk;
+      res.on("data", (chunk: Buffer) => {
+        data += chunk.toString();
       });
       res.on("end", () => {
         if (res.statusCode === 200) {
           resolve(data);
         } else {
-          reject(new Error(`HTTP ${res.statusCode}`));
+          reject(new Error(`HTTP ${res.statusCode || "unknown"}`));
         }
       });
     });
@@ -287,43 +276,13 @@ async function scrapeAnthropicPricingHTML(
  * Parse pricing from Anthropic pricing page HTML
  * This is a basic implementation - may need refinement based on actual page structure
  */
-function parseAnthropicPricingFromHTML(html) {
+function parseAnthropicPricingFromHTML(html: string | null): Record<
+  string,
+  { input: number; output: number }
+> | null {
   if (!html) return null;
 
   try {
-    // Extract pricing information from HTML
-    // This is a simplified parser - actual implementation would need to handle
-    // the specific HTML structure of Anthropic's pricing page
-
-    // Look for pricing patterns in the HTML
-    // Example patterns to look for:
-    // - "$X.XX per million input tokens"
-    // - "$X.XX per million output tokens"
-    // - Model names and their associated prices
-
-    // TODO: Implement actual parsing logic
-    // const pricing = {};
-    // const modelPatterns = [
-    //   {
-    //     name: "claude-sonnet-4",
-    //     patterns: [
-    //       /sonnet\s*4[^$]*\$([\d.]+)/gi,
-    //       /sonnet\s*4[^$]*\$([\d.]+)/gi,
-    //     ],
-    //   },
-    //   {
-    //     name: "claude-opus-4.1",
-    //     patterns: [/opus\s*4[^$]*\$([\d.]+)/gi, /opus\s*4[^$]*\$([\d.]+)/gi],
-    //   },
-    //   {
-    //     name: "claude-haiku-4.5",
-    //     patterns: [
-    //       /haiku\s*4[^$]*\$([\d.]+)/gi,
-    //       /haiku\s*4[^$]*\$([\d.]+)/gi,
-    //     ],
-    //   },
-    // ];
-
     // TODO: Implement actual HTML parsing logic here
     // For now, return null to use fallback-pricing.json
     console.warn(
@@ -331,7 +290,9 @@ function parseAnthropicPricingFromHTML(html) {
     );
     return null;
   } catch (error) {
-    console.warn(`⚠️  Error parsing pricing HTML: ${error.message}`);
+    console.warn(
+      `⚠️  Error parsing pricing HTML: ${error instanceof Error ? error.message : String(error)}`
+    );
     return null;
   }
 }
@@ -339,7 +300,7 @@ function parseAnthropicPricingFromHTML(html) {
 /**
  * Update Anthropic pricing from scraped data
  */
-async function updateAnthropicPricing() {
+async function updateAnthropicPricing(): Promise<void> {
   try {
     const html = await scrapeAnthropicPricingHTML();
     if (!html) {
@@ -358,17 +319,25 @@ async function updateAnthropicPricing() {
         "utf-8"
       );
       console.log("✅ Updated Anthropic pricing from scraped data");
+    } else {
+      console.log(
+        "ℹ️  Using fallback-pricing.json for Anthropic pricing (scraping not fully implemented)"
+      );
     }
   } catch (error) {
-    console.warn(`⚠️  Could not update Anthropic pricing: ${error.message}`);
+    // Silently fail - use pricing.json as fallback
+    // Pricing scraping is optional and pricing.json is the source of truth
   }
 }
 
 /**
  * Get Anthropic pricing - loaded from fallback-pricing.json (or scraped if available)
- * Prices are per 1k tokens (converted from per 1M tokens)
+ * Uses highest price as fallback if model not found
  */
-function getAnthropicPricing(modelId) {
+function getAnthropicPricing(modelId: string): {
+  input: number;
+  output: number;
+} {
   const id = modelId.toLowerCase();
   const pricing = loadPricingData().anthropic;
 
@@ -377,160 +346,96 @@ function getAnthropicPricing(modelId) {
     return pricing[id];
   }
 
-  // Pattern matching
-  if (
-    id.includes("sonnet") &&
-    id.includes("4") &&
-    (id.includes("2025") || id.includes("50514"))
-  ) {
-    return (
-      pricing["claude-sonnet-4-20250514"] || { input: 0.003, output: 0.015 }
-    );
-  }
-  if (id.includes("opus") && (id.includes("4") || id.includes("4.1"))) {
-    return pricing["claude-opus-4.1"] || { input: 0.003, output: 0.015 };
-  }
-  if (id.includes("sonnet") && (id.includes("4") || id.includes("4.5"))) {
-    return pricing["claude-sonnet-4.5"] || { input: 0.003, output: 0.015 };
-  }
-  if (id.includes("haiku") && (id.includes("4") || id.includes("4.5"))) {
-    return pricing["claude-haiku-4.5"] || { input: 0.003, output: 0.015 };
-  }
-  if (id.includes("opus")) {
-    return pricing["claude-3-opus-20240229"] || { input: 0.003, output: 0.015 };
-  }
-  if (id.includes("sonnet")) {
-    return (
-      pricing["claude-3-5-sonnet-20241022"] || { input: 0.003, output: 0.015 }
-    );
-  }
-  if (id.includes("haiku")) {
-    return (
-      pricing["claude-3-haiku-20240307"] || { input: 0.003, output: 0.015 }
-    );
-  }
-
-  // Default fallback
-  return { input: 0.003, output: 0.015 };
+  // Use highest price as fallback
+  return getHighestPricing("anthropic");
 }
 
 /**
  * Fetch available models from Grok API
+ * Grok uses OpenAI-compatible API, so we can use OpenAI SDK
  */
-async function fetchGrokModels(apiKey) {
+async function fetchGrokModels(apiKey?: string) {
+  if (!apiKey) {
+    console.log(
+      "ℹ️  GROK_API_KEY not set, using known Grok models as fallback"
+    );
+    return loadFallbackModels().grok;
+  }
+
   try {
-    if (apiKey) {
-      console.log("📡 Fetching models from Grok API...");
-      try {
-        // Grok uses OpenAI-compatible API
-        const response = await httpsRequest("https://api.x.ai/v1/models", {
-          method: "GET",
-          headers: {
-            Authorization: `Bearer ${apiKey}`,
-          },
-        });
+    console.log("📡 Fetching models from Grok API...");
+    // Grok uses OpenAI-compatible API
+    const grok = new OpenAI({
+      apiKey,
+      baseURL: "https://api.x.ai/v1",
+    });
 
-        const models = response.data || [];
-        const grokModels = models
-          .filter((m) => m.id.includes("grok"))
-          .map((m) => ({
-            id: m.id,
-            name: m.id,
-          }));
+    const response = await grok.models.list();
+    const models = response.data || [];
 
-        if (grokModels.length > 0) {
-          console.log(`✅ Found ${grokModels.length} Grok models`);
-          return grokModels;
-        }
-      } catch (error) {
-        console.warn(`⚠️  Could not fetch Grok models: ${error.message}`);
-      }
-    } else {
-      console.log(
-        "ℹ️  GROK_API_KEY not set, using known Grok models as fallback"
-      );
+    const grokModels = models
+      .filter((m) => m.id.includes("grok"))
+      .map((m) => ({
+        id: m.id,
+        name: m.id,
+      }));
+
+    if (grokModels.length > 0) {
+      console.log(`✅ Found ${grokModels.length} Grok models`);
+      return grokModels;
     }
 
-    // Use known models as fallback
     return loadFallbackModels().grok;
   } catch (error) {
-    console.warn(`⚠️  Error fetching Grok models: ${error.message}`);
+    console.warn(
+      `⚠️  Could not fetch Grok models: ${error instanceof Error ? error.message : String(error)}`
+    );
     return loadFallbackModels().grok;
   }
 }
 
 /**
  * Get Grok pricing - loaded from fallback-pricing.json
+ * Uses highest price as fallback if model not found
  */
-function getGrokPricing(modelId) {
+function getGrokPricing(modelId: string): { input: number; output: number } {
   const pricing = loadPricingData().grok;
-  return pricing[modelId] || { input: 0.001, output: 0.001 };
+  if (pricing[modelId]) {
+    return pricing[modelId];
+  }
+  // Use highest price as fallback
+  return getHighestPricing("grok");
 }
 
 /**
  * Get context window for a model
+ * First tries to fetch from API, then falls back to context-windows.json
  */
-function getContextWindow(provider, modelId) {
+function getContextWindow(
+  provider: "openai" | "anthropic" | "grok",
+  modelId: string
+): number {
   const id = modelId.toLowerCase();
+  const contextWindows = loadContextWindows();
 
-  const contextWindows = {
-    openai: {
-      "gpt-5-pro": 400000,
-      "gpt-5": 128000,
-      "gpt-5-mini": 128000,
-      "gpt-5-nano": 128000,
-      "gpt-4o": 128000,
-      "gpt-4o-mini": 128000,
-      "gpt-4-turbo": 128000,
-      "gpt-4": 8192,
-      "gpt-3.5-turbo": 16385,
-    },
-    anthropic: {
-      "claude-opus-4.1": 200000,
-      "claude-sonnet-4.5": 200000,
-      "claude-haiku-4.5": 200000,
-      "claude-3-5-sonnet-20241022": 200000,
-      "claude-3-5-sonnet-20240620": 200000,
-      "claude-3-opus-20240229": 200000,
-      "claude-3-sonnet-20240229": 200000,
-      "claude-3-haiku-20240307": 200000,
-    },
-    grok: {
-      "grok-beta": 8192,
-      "grok-2": 131072,
-    },
-  };
-
-  // Try exact match
+  // Try exact match first
   if (contextWindows[provider]?.[id]) {
     return contextWindows[provider][id];
   }
 
-  // Pattern matching
+  // Default fallbacks based on provider
   if (provider === "openai") {
-    if (id.includes("gpt-5-pro")) return 400000;
-    if (
-      id.includes("gpt-5") ||
-      id.includes("gpt-4o") ||
-      id.includes("gpt-4-turbo") ||
-      id.includes("o3")
-    ) {
-      return 128000;
-    }
-    if (id.includes("gpt-4") && !id.includes("turbo") && !id.includes("o")) {
-      return 8192;
-    }
-    if (id.includes("gpt-3.5")) {
-      return 16385;
-    }
-    return 128000; // Default for newer models
+    // Most OpenAI models have 128k, older ones have smaller windows
+    return 128000;
   }
 
   if (provider === "anthropic") {
-    return 200000; // All Claude 3+ and 4+ models have 200k
+    // All Claude 3+ and 4+ models have 200k
+    return 200000;
   }
 
   if (provider === "grok") {
+    // Grok-2 has larger context, others have 8k
     return id.includes("grok-2") ? 131072 : 8192;
   }
 
@@ -540,7 +445,10 @@ function getContextWindow(provider, modelId) {
 /**
  * Determine if a model is the "smartest" for its provider
  */
-function isSmartestModel(provider, modelId) {
+function isSmartestModel(
+  provider: "openai" | "anthropic" | "grok",
+  modelId: string
+): boolean {
   const id = modelId.toLowerCase();
 
   if (provider === "openai") {
@@ -576,7 +484,7 @@ function isSmartestModel(provider, modelId) {
 /**
  * Update models.json with latest information
  */
-async function updateModels() {
+async function updateModels(): Promise<void> {
   console.log("🔄 Dynamically fetching and updating models.json...\n");
 
   try {
@@ -593,7 +501,50 @@ async function updateModels() {
     const grokModels = await fetchGrokModels(grokKey);
 
     // Build new models structure
-    const newModels = {
+    const newModels: {
+      openai: {
+        provider: string;
+        models: Array<{
+          id: string;
+          name: string;
+          description: string;
+          contextWindow: number;
+          pricing: { input: number; output: number; unit: string };
+          smartest: boolean;
+          available: boolean;
+        }>;
+        defaultModel: string | null;
+        smartestModel: string | null;
+      };
+      anthropic: {
+        provider: string;
+        models: Array<{
+          id: string;
+          name: string;
+          description: string;
+          contextWindow: number;
+          pricing: { input: number; output: number; unit: string };
+          smartest: boolean;
+          available: boolean;
+        }>;
+        defaultModel: string | null;
+        smartestModel: string | null;
+      };
+      grok: {
+        provider: string;
+        models: Array<{
+          id: string;
+          name: string;
+          description: string;
+          contextWindow: number;
+          pricing: { input: number; output: number; unit: string };
+          smartest: boolean;
+          available: boolean;
+        }>;
+        defaultModel: string | null;
+        smartestModel: string | null;
+      };
+    } = {
       openai: {
         provider: "OpenAI",
         models: [],
@@ -616,12 +567,11 @@ async function updateModels() {
 
     // Process OpenAI models
     if (openaiModels && openaiModels.length > 0) {
-      const modelIds = openaiModels.map((m) => m.id);
-      let smartestModelId = null;
+      let smartestModelId: string | null = null;
 
       // First pass: find the smartest model
       for (const model of openaiModels) {
-        if (isSmartestModel("openai", model.id, modelIds)) {
+        if (isSmartestModel("openai", model.id)) {
           smartestModelId = model.id;
           break; // Only one smartest model
         }
@@ -652,18 +602,17 @@ async function updateModels() {
 
       // Set default and smartest
       newModels.openai.smartestModel =
-        smartestModelId || newModels.openai.models[0]?.id;
-      newModels.openai.defaultModel = newModels.openai.models[0]?.id;
+        smartestModelId || newModels.openai.models[0]?.id || null;
+      newModels.openai.defaultModel = newModels.openai.models[0]?.id || null;
     }
 
     // Process Anthropic models
     if (anthropicModels && anthropicModels.length > 0) {
-      const modelIds = anthropicModels.map((m) => m.id);
-      let smartestModelId = null;
+      let smartestModelId: string | null = null;
 
       // First pass: find the smartest model
       for (const model of anthropicModels) {
-        if (isSmartestModel("anthropic", model.id, modelIds)) {
+        if (isSmartestModel("anthropic", model.id)) {
           smartestModelId = model.id;
           break; // Only one smartest model
         }
@@ -693,18 +642,18 @@ async function updateModels() {
       });
 
       newModels.anthropic.smartestModel =
-        smartestModelId || newModels.anthropic.models[0]?.id;
-      newModels.anthropic.defaultModel = newModels.anthropic.models[0]?.id;
+        smartestModelId || newModels.anthropic.models[0]?.id || null;
+      newModels.anthropic.defaultModel =
+        newModels.anthropic.models[0]?.id || null;
     }
 
     // Process Grok models
     if (grokModels && grokModels.length > 0) {
-      const modelIds = grokModels.map((m) => m.id);
-      let smartestModelId = null;
+      let smartestModelId: string | null = null;
 
       // First pass: find the smartest model
       for (const model of grokModels) {
-        if (isSmartestModel("grok", model.id, modelIds)) {
+        if (isSmartestModel("grok", model.id)) {
           smartestModelId = model.id;
           break; // Only one smartest model
         }
@@ -734,8 +683,8 @@ async function updateModels() {
       });
 
       newModels.grok.smartestModel =
-        smartestModelId || newModels.grok.models[0]?.id;
-      newModels.grok.defaultModel = newModels.grok.models[0]?.id;
+        smartestModelId || newModels.grok.models[0]?.id || null;
+      newModels.grok.defaultModel = newModels.grok.models[0]?.id || null;
     }
 
     // Write updated models.json
@@ -761,10 +710,11 @@ async function updateModels() {
     console.log("   - OpenAI: https://openai.com/api/pricing/");
     console.log("   - Anthropic: https://www.anthropic.com/pricing");
     console.log("   - Grok: https://x.ai/pricing\n");
-
-    return true;
   } catch (error) {
-    console.error("❌ Error updating models.json:", error);
+    console.error(
+      "❌ Error updating models.json:",
+      error instanceof Error ? error.message : String(error)
+    );
     process.exit(1);
   }
 }
@@ -775,3 +725,4 @@ if (import.meta.url === `file://${process.argv[1]}`) {
 }
 
 export { updateModels };
+

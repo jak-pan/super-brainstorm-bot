@@ -1,0 +1,29 @@
+{
+  "openai": {
+    "gpt-5-pro": 400000,
+    "gpt-5": 128000,
+    "gpt-5-mini": 128000,
+    "gpt-5-nano": 128000,
+    "gpt-4o": 128000,
+    "gpt-4o-mini": 128000,
+    "gpt-4-turbo": 128000,
+    "gpt-4": 8192,
+    "gpt-3.5-turbo": 16385
+  },
+  "anthropic": {
+    "claude-sonnet-4-20250514": 200000,
+    "claude-opus-4.1": 200000,
+    "claude-sonnet-4.5": 200000,
+    "claude-haiku-4.5": 200000,
+    "claude-3-5-sonnet-20241022": 200000,
+    "claude-3-5-sonnet-20240620": 200000,
+    "claude-3-opus-20240229": 200000,
+    "claude-3-sonnet-20240229": 200000,
+    "claude-3-haiku-20240307": 200000
+  },
+  "grok": {
+    "grok-beta": 8192,
+    "grok-2": 131072
+  }
+}
+
