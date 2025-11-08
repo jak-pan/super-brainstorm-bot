@@ -62,15 +62,17 @@ export class SessionPlanner {
   /**
    * Handle initial message - start planning phase
    * Analyzes the message and generates clarifying questions if needed
+   * Returns a promise that resolves when plan is created or questions are asked
    *
    * @param conversationId - The conversation ID
    * @param message - The initial message
+   * @returns Promise that resolves with { type: 'plan' | 'questions', ... }
    * @throws Error if conversation not found
    */
   async handleInitialMessage(
     conversationId: string,
     message: Message
-  ): Promise<void> {
+  ): Promise<{ type: 'plan' | 'questions'; plan?: string; questions?: string[] }> {
     const conversation = this.contextManager.getConversation(conversationId);
     if (!conversation) {
       throw new Error(`Conversation ${conversationId} not found`);
@@ -91,24 +93,29 @@ export class SessionPlanner {
       conversation.planningState = planningState;
     }
 
-    // Analyze message and generate questions
-    await this.analyzeAndAskQuestions(conversationId, message);
+    // Analyze message and generate questions - returns result
+    const result = await this.analyzeAndAskQuestions(conversationId, message);
 
     // Set timeout for planning phase
     this.setPlanningTimeout(conversationId);
+
+    return result;
   }
 
   /**
    * Analyze initial message and generate clarifying questions
+   * Returns result indicating if questions were asked or plan was created
    */
   private async analyzeAndAskQuestions(
     conversationId: string,
     initialMessage: Message
-  ): Promise<void> {
+  ): Promise<{ type: 'plan' | 'questions'; plan?: string; questions?: string[] }> {
     const adapter = this.adapterRegistry.getAdapter(this.defaultModel);
     if (!adapter) {
       logger.error(`Session planner adapter ${this.defaultModel} not found`);
-      return;
+      // Fallback: create plan
+      const planResult = await this.createPlan(conversationId, initialMessage);
+      return { type: 'plan', plan: planResult.plan };
     }
 
     const systemPrompt = PromptLoader.loadPrompt(
@@ -138,14 +145,18 @@ export class SessionPlanner {
           `**Session Planner** 🤔\n\nI'd like to clarify a few things before we start:\n\n${questionsText}\n\nPlease reply with your answers, or use \`/sbb start\` to proceed with defaults. Use \`/sbb edit\` to modify your initial message.`,
           initialMessage.discordMessageId
         );
-      } else if (this.messageCallback) {
+        // Return questions state - plan will be created after user responds
+        return { type: 'questions', questions };
+      } else {
         // No questions needed, proceed to plan creation
-        await this.createPlan(conversationId, initialMessage);
+        const planResult = await this.createPlan(conversationId, initialMessage);
+        return { type: 'plan', plan: planResult.plan };
       }
     } catch (error) {
       logger.error("Error analyzing message for questions:", error);
       // Fallback: proceed without questions
-      await this.createPlan(conversationId, initialMessage);
+      const planResult = await this.createPlan(conversationId, initialMessage);
+      return { type: 'plan', plan: planResult.plan };
     }
   }
 
@@ -159,50 +170,76 @@ export class SessionPlanner {
   async handlePlanningResponse(
     conversationId: string,
     message: Message
-  ): Promise<void> {
+  ): Promise<{ type: 'plan' | 'needs_approval' } | null> {
     const conversation = this.contextManager.getConversation(conversationId);
     if (!conversation || conversation.status !== "planning") {
-      return;
+      return null;
     }
 
     // Add response to planning state
     if (conversation.planningState) {
       // Check if this is an approval command
       if (message.content.toLowerCase().match(/^!?(start|approve|go)$/i)) {
-        await this.approveAndStart(conversationId);
-        return;
+        // If plan exists, approve and start
+        if (conversation.planningState.plan) {
+          await this.approveAndStart(conversationId);
+          return { type: 'needs_approval' };
+        }
+        // If no plan but questions exist, proceed with defaults
+        if (conversation.planningState.questions.length > 0) {
+          await this.createPlan(conversationId, message);
+          return { type: 'plan' };
+        }
+        return null;
       }
 
-      // If we have questions and this is a response, update planning
+      // If we have questions and this is a response, create plan with clarifications
       if (
         conversation.planningState.questions.length > 0 &&
         !conversation.planningState.plan
       ) {
         // User answered questions, now create plan
         await this.createPlan(conversationId, message);
+        return { type: 'plan' };
       }
     }
+
+    return null;
   }
 
   /**
    * Create conversation plan with parameters
    * Generates expanded topic, plan, and conversation parameters
+   * Returns a promise that resolves when plan is created
    *
    * @param conversationId - The conversation ID
    * @param _contextMessage - Context message for plan generation
+   * @returns Promise that resolves with plan data
    */
   private async createPlan(
     conversationId: string,
     _contextMessage: Message
-  ): Promise<void> {
+  ): Promise<{ plan: string; expandedTopic: string; parameters: any }> {
     const adapter = this.adapterRegistry.getAdapter(this.defaultModel);
     if (!adapter) {
       logger.error(`Session planner adapter ${this.defaultModel} not found`);
-      return;
+      // Fallback: use default plan
+      await this.createDefaultPlan(conversationId);
+      const conversation = this.contextManager.getConversation(conversationId);
+      if (conversation?.planningState?.plan) {
+        return {
+          plan: conversation.planningState.plan,
+          expandedTopic: conversation.planningState.expandedTopic || conversation.topic,
+          parameters: conversation.planningState.parameters || {},
+        };
+      }
+      throw new Error("Failed to create default plan");
     }
 
     const conversation = this.contextManager.getConversation(conversationId);
-    if (!conversation) return;
+    if (!conversation) {
+      throw new Error(`Conversation ${conversationId} not found`);
+    }
 
     const allMessages = this.contextManager.getMessages(conversationId);
 
@@ -229,10 +266,25 @@ export class SessionPlanner {
         const planText = `**Session Plan** 📋\n\n**Topic:** ${planData.expandedTopic}\n\n**Plan:**\n${planData.plan}\n\n**Parameters:**\n- Max Messages: ${planData.parameters.maxMessages}\n- Cost Limit: $${planData.parameters.costLimit}\n- Timeout: ${planData.parameters.timeoutMinutes} minutes\n- Context Window: ${planData.parameters.maxContextWindowPercent}%\n\nType \`/sbb start\` to begin the conversation, or \`/sbb edit\` to modify the plan.`;
         await this.messageCallback(planText);
       }
+
+      return {
+        plan: planData.plan,
+        expandedTopic: planData.expandedTopic,
+        parameters: planData.parameters,
+      };
     } catch (error) {
       logger.error("Error creating plan:", error);
       // Fallback: use default parameters
       await this.createDefaultPlan(conversationId);
+      const conversation = this.contextManager.getConversation(conversationId);
+      if (conversation?.planningState?.plan) {
+        return {
+          plan: conversation.planningState.plan,
+          expandedTopic: conversation.planningState.expandedTopic || conversation.topic,
+          parameters: conversation.planningState.parameters || {},
+        };
+      }
+      throw error;
     }
   }
 

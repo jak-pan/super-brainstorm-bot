@@ -178,14 +178,19 @@ export class DiscordBot {
             conversationId,
             appMessage
           );
+          // If questions were asked, stay in planning mode
+          // If plan was created, it will wait for /sbb start
+          return;
         } else {
-          // Handle planning response
+          // Handle planning response - this creates plan if questions were answered
           await this.sessionPlanner.handlePlanningResponse(
             conversationId,
             appMessage
           );
+          // If plan was created, it's ready but needs /sbb start to approve
+          // Stay in planning mode until user calls /sbb start
+          return;
         }
-        return;
       }
 
       // Handle active conversation
@@ -240,11 +245,12 @@ export class DiscordBot {
         : undefined;
       const channelId = interaction.channel!.id;
       const topicOption = interaction.options.getString("topic");
-      
+
       // Topic is required if not in thread
       if (!isInThread && !topicOption) {
         await interaction.editReply({
-          content: "Topic is required when not in a thread. Please provide a topic.",
+          content:
+            "Topic is required when not in a thread. Please provide a topic.",
         });
         return;
       }
@@ -261,7 +267,11 @@ export class DiscordBot {
         : null;
 
       // If conversation exists and has a plan, approve and start
-      if (conversation && conversation.status === "planning" && conversation.planningState?.plan) {
+      if (
+        conversation &&
+        conversation.status === "planning" &&
+        conversation.planningState?.plan
+      ) {
         // Compile previous messages if in thread
         if (isInThread && thread && conversation.messages.length > 1) {
           await interaction.editReply({
@@ -293,7 +303,7 @@ export class DiscordBot {
       if (!conversation) {
         conversationId = this.getOrCreateConversation(channelId, topic, thread);
         conversation = this.contextManager.getConversation(conversationId);
-        
+
         if (!conversation) {
           await interaction.editReply({
             content: "Error: Failed to create conversation.",
@@ -311,7 +321,9 @@ export class DiscordBot {
               authorId: msg.author.id,
               authorType: msg.author.bot ? "ai" : "user",
               content: msg.content,
-              replyTo: msg.reference?.messageId ? [msg.reference.messageId] : [],
+              replyTo: msg.reference?.messageId
+                ? [msg.reference.messageId]
+                : [],
               timestamp: msg.createdAt,
               discordMessageId: msg.id,
             }));
@@ -337,29 +349,22 @@ export class DiscordBot {
         timestamp: new Date(),
       };
 
-      // Start the planner (async, non-blocking)
-      this.sessionPlanner.handleInitialMessage(
+      // Start the planner and await result
+      const planningResult = await this.sessionPlanner.handleInitialMessage(
         conversationId,
         plannerInputMessage
-      ).catch((error) => {
-        logger.error("Error in handleInitialMessage:", error);
-      });
+      );
 
-      // Poll for plan creation with timeout (max 10 seconds)
-      let planCreated = false;
-      const maxWaitTime = 10000; // 10 seconds
-      const pollInterval = 500; // Check every 500ms
-      const startTime = Date.now();
-
-      while (!planCreated && Date.now() - startTime < maxWaitTime) {
-        await new Promise((resolve) => setTimeout(resolve, pollInterval));
-        conversation = this.contextManager.getConversation(conversationId);
-        if (conversation?.planningState?.plan) {
-          planCreated = true;
-        }
+      // If questions were asked, short-circuit to planning mode
+      if (planningResult.type === 'questions') {
+        await interaction.editReply({
+          content: `✅ Planning started. Session Planner has asked clarifying questions. Please respond, then use \`/sbb start\` to begin the conversation.`,
+        });
+        return;
       }
 
-      if (planCreated && conversation) {
+      // Plan was created, auto-start
+      if (planningResult.type === 'plan') {
         // Compile previous messages if in thread before starting
         if (isInThread && thread && conversation.messages.length > 1) {
           await interaction.editReply({
@@ -378,11 +383,6 @@ export class DiscordBot {
         await this.sessionPlanner.approveAndStart(conversationId);
         await interaction.editReply({
           content: `✅ Conversation started! Plan created and conversation is now active.`,
-        });
-      } else {
-        // Plan not ready yet, inform user they can use /sbb start later
-        await interaction.editReply({
-          content: `✅ Planning started. Plan is being created. Use \`/sbb start\` once the plan is ready to begin the conversation.`,
         });
       }
     } catch (error) {
@@ -579,14 +579,21 @@ export class DiscordBot {
       this.contextManager.addMessage(conversationId, editedMessage);
 
       // Re-trigger planning with the edited message
-      await this.sessionPlanner.handlePlanningResponse(
+      const planningResponse = await this.sessionPlanner.handlePlanningResponse(
         conversationId,
         editedMessage
       );
 
-      await interaction.editReply({
-        content: `✅ Planning message updated. Session Planner will update the plan based on your changes.`,
-      });
+      // If plan was created, inform user
+      if (planningResponse?.type === 'plan') {
+        await interaction.editReply({
+          content: `✅ Planning message updated. Plan has been created. Use \`/sbb start\` to begin the conversation.`,
+        });
+      } else {
+        await interaction.editReply({
+          content: `✅ Planning message updated. Session Planner will update the plan based on your changes.`,
+        });
+      }
     } catch (error) {
       logger.error("Error editing planning message:", error);
       await interaction.editReply({
