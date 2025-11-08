@@ -306,7 +306,7 @@ export class DiscordBot {
           try {
             // Process Scribe first (TLDR depends on Scribe's output)
             await this.scribeBot.processMessagesImmediate(conversation);
-            
+
             // Then process TLDR (which uses Scribe's output)
             await this.tldrBot.updateImmediate(conversation);
 

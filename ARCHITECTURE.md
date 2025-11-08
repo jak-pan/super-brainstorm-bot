@@ -424,6 +424,7 @@ flowchart TD
 * **Information Preservation**: Preserves ALL key reasoning, thought processes, technical details, and examples
 * **Structure**: Maintains complete discussion flow with context in a structured format
 * **Debouncing**: Updates are debounced by `SCRIBE_UPDATE_INTERVAL` seconds to avoid excessive API calls
+* **Immediate Processing**: `processMessagesImmediate()` method bypasses debouncing for immediate processing (used when starting conversations in threads)
 * **Error Handling**: If documentation generation fails, creates a fallback summary with basic conversation stats
 * **Non-blocking**: All operations are asynchronous and never block conversation flow
 * **Queue Management**: Each conversation has its own update queue with timeout management
@@ -635,6 +636,8 @@ flowchart TD
 
 * **Source**: Reads detailed documentation from Notion (Scribe's verbose content) rather than raw conversation
 * **Two-Tier System**: Extracts concise summaries from the detailed documentation, ensuring no information loss
+* **Time-based Throttling**: Updates are throttled by `TLDR_UPDATE_INTERVAL` seconds to avoid excessive API calls
+* **Immediate Processing**: `updateImmediate()` method bypasses throttling for immediate processing (used when starting conversations in threads)
 * **Update Interval**: Only updates every `TLDR_UPDATE_INTERVAL` seconds (default: 600s / 10 minutes)
 * **JSON Parsing**: Attempts to parse structured JSON response, falls back to text extraction
 * **Key Findings**: Extracts 3-5 key findings or conclusions from the detailed documentation
@@ -1312,9 +1315,12 @@ flowchart TD
 * **Automatic Thread Detection**: Bot automatically detects when messages are in threads
 * **Thread Compilation**: When starting a conversation in a thread with `/sbb start`, the bot:
   * Fetches all previous messages from the thread
-  * Compiles them using Scribe and TLDR bots
-  * Creates a conversation context from the compiled discussion
-  * Allows models to join with full context of previous discussion
+  * Adds them to the conversation context
+  * Processes them immediately with Scribe (detailed documentation) and TLDR (summary)
+  * Waits for both Scribe and TLDR to complete processing
+  * Starts planning with the compiled context (Scribe's detailed documentation and TLDR summary)
+  * Session Planner analyzes the compiled discussion and creates a plan
+  * Uses immediate processing methods (`processMessagesImmediate` and `updateImmediate`) that bypass debouncing/throttling
 * **Thread Tracking**: Thread information is stored in conversation state (`threadId`, `isThread`)
 * **New Topics**: For new topics, manager starts a fresh thread automatically
 
@@ -1352,10 +1358,13 @@ All commands use the `/sbb` prefix. The bot also processes regular messages in c
 #### Conversation Management
 
 * `/sbb start [topic]` - Start a new conversation
-  * **In a channel**: Starts a new conversation (creates a new thread)
-  * **In a thread**: Starts a conversation in the current thread and compiles previous discussion
+  * **In a channel**: Starts a new conversation immediately
+  * **In a thread**: Compiles previous discussion first, then starts planning
+    * Fetches all previous messages from the thread
+    * Processes them immediately with Scribe (detailed documentation) and TLDR (summary)
+    * Waits for compilation to complete (uses immediate processing methods)
+    * Starts planning with the compiled context
   * Automatically detects if you're in a channel or thread
-  * Compiles previous discussion when used in a thread (using Scribe and TLDR)
   * Automatically detects task type and selects appropriate models
   * Sets $22 cost limit for conversations and $2 for images by default (configurable in `default-settings.json`)
 * `/sbb continue` - Continue a paused conversation
