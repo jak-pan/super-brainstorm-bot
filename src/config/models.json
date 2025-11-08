@@ -3,9 +3,61 @@
     "provider": "OpenAI",
     "models": [
       {
+        "id": "gpt-5-pro",
+        "name": "Gpt 5 Pro",
+        "description": "OpenAI gpt-5-pro model",
+        "contextWindow": 400000,
+        "pricing": {
+          "input": 0.015,
+          "output": 0.12,
+          "unit": "per_1k_tokens"
+        },
+        "smartest": true,
+        "available": true
+      },
+      {
+        "id": "gpt-5",
+        "name": "Gpt 5",
+        "description": "OpenAI gpt-5 model",
+        "contextWindow": 128000,
+        "pricing": {
+          "input": 0.00125,
+          "output": 0.01,
+          "unit": "per_1k_tokens"
+        },
+        "smartest": true,
+        "available": true
+      },
+      {
+        "id": "gpt-5-mini",
+        "name": "Gpt 5 Mini",
+        "description": "OpenAI gpt-5-mini model",
+        "contextWindow": 128000,
+        "pricing": {
+          "input": 0.00025,
+          "output": 0.002,
+          "unit": "per_1k_tokens"
+        },
+        "smartest": false,
+        "available": true
+      },
+      {
+        "id": "gpt-5-nano",
+        "name": "Gpt 5 Nano",
+        "description": "OpenAI gpt-5-nano model",
+        "contextWindow": 128000,
+        "pricing": {
+          "input": 0.00005,
+          "output": 0.0004,
+          "unit": "per_1k_tokens"
+        },
+        "smartest": false,
+        "available": true
+      },
+      {
         "id": "gpt-4o",
-        "name": "GPT-4o",
-        "description": "Most advanced GPT-4 model, optimized for speed and cost. Multimodal (text and images)",
+        "name": "Gpt 4o",
+        "description": "OpenAI gpt-4o model",
         "contextWindow": 128000,
         "pricing": {
           "input": 0.0025,
@@ -17,8 +69,8 @@
       },
       {
         "id": "gpt-4o-mini",
-        "name": "GPT-4o Mini",
-        "description": "Faster and cheaper GPT-4o variant. Multimodal (text and images)",
+        "name": "Gpt 4o Mini",
+        "description": "OpenAI gpt-4o-mini model",
         "contextWindow": 128000,
         "pricing": {
           "input": 0.00015,
@@ -30,8 +82,8 @@
       },
       {
         "id": "gpt-4-turbo",
-        "name": "GPT-4 Turbo",
-        "description": "Previous generation GPT-4 Turbo",
+        "name": "Gpt 4 Turbo",
+        "description": "OpenAI gpt-4-turbo model",
         "contextWindow": 128000,
         "pricing": {
           "input": 0.01,
@@ -42,22 +94,9 @@
         "available": true
       },
       {
-        "id": "gpt-4",
-        "name": "GPT-4",
-        "description": "Standard GPT-4 model",
-        "contextWindow": 8192,
-        "pricing": {
-          "input": 0.03,
-          "output": 0.06,
-          "unit": "per_1k_tokens"
-        },
-        "smartest": false,
-        "available": true
-      },
-      {
         "id": "gpt-3.5-turbo",
-        "name": "GPT-3.5 Turbo",
-        "description": "Fast and cost-effective model",
+        "name": "Gpt 3.5 Turbo",
+        "description": "OpenAI gpt-3.5-turbo model",
         "contextWindow": 16385,
         "pricing": {
           "input": 0.0005,
@@ -68,16 +107,29 @@
         "available": true
       }
     ],
-    "defaultModel": "gpt-4o",
-    "smartestModel": "gpt-4o"
+    "defaultModel": "gpt-5-pro",
+    "smartestModel": "gpt-5-pro"
   },
   "anthropic": {
     "provider": "Anthropic",
     "models": [
       {
-        "id": "claude-3-5-sonnet-20241022",
-        "name": "Claude 3.5 Sonnet",
-        "description": "Latest Claude 3.5 Sonnet model (October 2024). High-performance model balancing efficiency and reasoning",
+        "id": "claude-opus-4.1",
+        "name": "Claude Opus 4.1",
+        "description": "Anthropic claude-opus-4.1 model",
+        "contextWindow": 200000,
+        "pricing": {
+          "input": 0.015,
+          "output": 0.075,
+          "unit": "per_1k_tokens"
+        },
+        "smartest": true,
+        "available": false
+      },
+      {
+        "id": "claude-sonnet-4.5",
+        "name": "Claude Sonnet 4.5",
+        "description": "Anthropic claude-sonnet-4.5 model",
         "contextWindow": 200000,
         "pricing": {
           "input": 0.003,
@@ -85,51 +137,77 @@
           "unit": "per_1k_tokens"
         },
         "smartest": true,
-        "available": true
+        "available": false
       },
       {
-        "id": "claude-3-5-sonnet-20240620",
-        "name": "Claude 3.5 Sonnet (June)",
-        "description": "Claude 3.5 Sonnet from June 2024",
+        "id": "claude-haiku-4.5",
+        "name": "Claude Haiku 4.5",
+        "description": "Anthropic claude-haiku-4.5 model",
+        "contextWindow": 200000,
+        "pricing": {
+          "input": 0.001,
+          "output": 0.005,
+          "unit": "per_1k_tokens"
+        },
+        "smartest": false,
+        "available": false
+      },
+      {
+        "id": "claude-3-5-sonnet-20241022",
+        "name": "Claude 3 5 Sonnet 20241022",
+        "description": "Anthropic claude-3-5-sonnet-20241022 model",
         "contextWindow": 200000,
         "pricing": {
           "input": 0.003,
           "output": 0.015,
           "unit": "per_1k_tokens"
         },
-        "smartest": false,
-        "available": true
+        "smartest": true,
+        "available": false
+      },
+      {
+        "id": "claude-3-5-sonnet-20240620",
+        "name": "Claude 3 5 Sonnet 20240620",
+        "description": "Anthropic claude-3-5-sonnet-20240620 model",
+        "contextWindow": 200000,
+        "pricing": {
+          "input": 0.003,
+          "output": 0.015,
+          "unit": "per_1k_tokens"
+        },
+        "smartest": true,
+        "available": false
       },
       {
         "id": "claude-3-opus-20240229",
-        "name": "Claude 3 Opus",
-        "description": "Most capable Claude 3 model",
+        "name": "Claude 3 Opus 20240229",
+        "description": "Anthropic claude-3-opus-20240229 model",
         "contextWindow": 200000,
         "pricing": {
           "input": 0.015,
           "output": 0.075,
           "unit": "per_1k_tokens"
         },
-        "smartest": false,
-        "available": true
+        "smartest": true,
+        "available": false
       },
       {
         "id": "claude-3-sonnet-20240229",
-        "name": "Claude 3 Sonnet",
-        "description": "Balanced Claude 3 model",
+        "name": "Claude 3 Sonnet 20240229",
+        "description": "Anthropic claude-3-sonnet-20240229 model",
         "contextWindow": 200000,
         "pricing": {
           "input": 0.003,
           "output": 0.015,
           "unit": "per_1k_tokens"
         },
-        "smartest": false,
-        "available": true
+        "smartest": true,
+        "available": false
       },
       {
         "id": "claude-3-haiku-20240307",
-        "name": "Claude 3 Haiku",
-        "description": "Fastest and most affordable Claude 3 model",
+        "name": "Claude 3 Haiku 20240307",
+        "description": "Anthropic claude-3-haiku-20240307 model",
         "contextWindow": 200000,
         "pricing": {
           "input": 0.00025,
@@ -137,11 +215,11 @@
           "unit": "per_1k_tokens"
         },
         "smartest": false,
-        "available": true
+        "available": false
       }
     ],
-    "defaultModel": "claude-3-5-sonnet-20241022",
-    "smartestModel": "claude-3-5-sonnet-20241022"
+    "defaultModel": "claude-opus-4.1",
+    "smartestModel": "claude-opus-4.1"
   },
   "grok": {
     "provider": "X.AI",
@@ -149,31 +227,31 @@
       {
         "id": "grok-beta",
         "name": "Grok Beta",
-        "description": "Grok beta model",
+        "description": "X.AI grok-beta model",
         "contextWindow": 8192,
         "pricing": {
           "input": 0.001,
           "output": 0.001,
           "unit": "per_1k_tokens"
         },
-        "smartest": true,
-        "available": true
+        "smartest": false,
+        "available": false
       },
       {
         "id": "grok-2",
-        "name": "Grok-2",
-        "description": "Latest Grok model",
+        "name": "Grok 2",
+        "description": "X.AI grok-2 model",
         "contextWindow": 131072,
         "pricing": {
           "input": 0.001,
           "output": 0.001,
           "unit": "per_1k_tokens"
         },
-        "smartest": false,
-        "available": true
+        "smartest": true,
+        "available": false
       }
     ],
     "defaultModel": "grok-beta",
-    "smartestModel": "grok-beta"
+    "smartestModel": "grok-2"
   }
 }
