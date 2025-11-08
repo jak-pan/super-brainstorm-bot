@@ -184,14 +184,14 @@ All commands use the `/sbb` prefix:
    * **With `/sbb plan`**: Creates plan and waits for `/sbb start` approval
 7. **Thread compilation** (on approval, if in thread): Previous messages are compiled by Scribe (detailed) and TLDR (summary)
 8. **Conversation starts** - All bots become active and the conversation begins
-8. **AI models respond** - Multiple AIs generate responses based on the conversation context
-9. **AIs interact** - AIs can respond to each other, building on previous responses
-10. **Scribe bot documents** - The conversation is automatically documented in detail and stored in Notion (async, non-blocking)
-11. **TLDR bot summarizes** - Key findings and summaries are extracted from Scribe's detailed documentation (async, non-blocking)
-12. **Cost tracking** - All costs are tracked directly from OpenRouter API responses (in USD) and aggregated per conversation
-13. **Automatic limits** - Conversations pause automatically when conversation cost limit ($22 default) is reached; image generation is blocked when image cost limit ($2 default) is reached
-14. **Unblock image generation** - Use `/sbb unblock-image` to resume image generation after it's been blocked
-15. **Context refresh** - When message count threshold is reached, the bot automatically refreshes context from Notion
+9. **AI models respond** - Multiple AIs generate responses based on the conversation context
+10. **AIs interact** - AIs can respond to each other, building on previous responses
+11. **Scribe bot documents** - The conversation is automatically documented in detail and stored in Notion (async, non-blocking)
+12. **TLDR bot summarizes** - Key findings and summaries are extracted from Scribe's detailed documentation (async, non-blocking)
+13. **Cost tracking** - All costs are tracked directly from OpenRouter API responses (in USD) and aggregated per conversation
+14. **Automatic limits** - Conversations pause automatically when conversation cost limit ($22 default) is reached; image generation is blocked when image cost limit ($2 default) is reached
+15. **Unblock image generation** - Use `/sbb unblock-image` to resume image generation after it's been blocked
+16. **Context refresh** - When message count threshold is reached, the bot automatically refreshes context from Notion
 
 ## Project Structure
 

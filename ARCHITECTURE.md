@@ -117,14 +117,16 @@ The Super Brainstorm Bot is a Discord-based multi-AI collaboration system that e
 * **Purpose**: Plan, moderate, and oversee conversations to ensure productive outcomes from all participants (AI and human)
 * **Responsibilities**:
   * **Planning Phase**:
-    * Analyze user's initial message/topic
+    * Analyze user's initial message/topic using promise-based approach (no timeout/polling)
     * Identify areas needing clarification
-    * Post clarifying questions in thread replies
+    * **If clarification needed**: Post clarifying questions, conversation stays in planning mode
+    * **User responds**: Plan is created automatically with clarifications incorporated
+    * **If no clarification needed**: Create conversation plan immediately
     * Assess appropriate conversation length and complexity
-    * Set conversation parameters (max messages, max tokens, timeout)
-    * Create a detailed conversation plan
+    * Set conversation parameters (max messages, cost limit, timeout)
+    * Create a detailed conversation plan (returns promise that resolves when plan is ready)
     * Expand on the user's original message
-    * Wait for user approval before starting conversation
+    * Wait for user approval before starting conversation (via `/sbb start` command)
     * Initialize conversation with approved parameters
     * Transition to active conversation state
   * **Moderation Phase** (Ongoing):
