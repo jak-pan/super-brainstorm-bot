@@ -234,7 +234,9 @@ export class DiscordBot {
 
     try {
       const isInThread = interaction.channel?.isThread();
-      const thread = isInThread ? (interaction.channel as ThreadChannel) : undefined;
+      const thread = isInThread
+        ? (interaction.channel as ThreadChannel)
+        : undefined;
       const channelId = interaction.channel!.id;
       const topic =
         interaction.options.getString("topic") ||
@@ -254,7 +256,11 @@ export class DiscordBot {
       }
 
       // Get or create conversation (works for both channels and threads)
-      const conversationId = this.getOrCreateConversation(channelId, topic, thread);
+      const conversationId = this.getOrCreateConversation(
+        channelId,
+        topic,
+        thread
+      );
       const conversation = this.contextManager.getConversation(conversationId);
 
       if (!conversation) {
@@ -291,25 +297,30 @@ export class DiscordBot {
             this.contextManager.addMessage(conversationId, msg);
           }
 
-          // Trigger Scribe and TLDR to process messages
-          this.scribeBot.notifyNewMessages(conversation).catch((error) => {
-            logger.error("Scribe bot error during thread start:", error);
-          });
-
-          this.tldrBot.checkAndUpdate(conversation).catch((error) => {
-            logger.error("TLDR bot error during thread start:", error);
-          });
-
-          // Wait for Scribe/TLDR to process all messages before starting
-          // Scribe uses debouncing (default 30s), TLDR uses interval (default 300s)
-          // Wait for Scribe to complete (updateInterval + some buffer for processing)
-          const scribeWaitTime = (this.config.scribe.updateInterval + 5) * 1000;
-          await new Promise((resolve) => setTimeout(resolve, scribeWaitTime));
-
-          // Update status message
+          // Process messages immediately with Scribe and TLDR
+          // Wait for both to complete before proceeding
           await interaction.editReply({
-            content: `📝 Previous discussion compiled (${previousMessages.length} messages). Starting planning...`,
+            content: `📝 Compiling previous discussion (${previousMessages.length} messages)...`,
           });
+
+          try {
+            // Process Scribe first (TLDR depends on Scribe's output)
+            await this.scribeBot.processMessagesImmediate(conversation);
+            
+            // Then process TLDR (which uses Scribe's output)
+            await this.tldrBot.updateImmediate(conversation);
+
+            // Update status message
+            await interaction.editReply({
+              content: `📝 Previous discussion compiled (${previousMessages.length} messages). Starting planning...`,
+            });
+          } catch (error) {
+            logger.error("Error compiling previous discussion:", error);
+            // Continue anyway - compilation is not critical for starting the conversation
+            await interaction.editReply({
+              content: `⚠️ Note: Some messages may not be fully compiled yet. Starting planning...`,
+            });
+          }
         }
       }
 

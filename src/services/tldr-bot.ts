@@ -47,6 +47,23 @@ export class TLDRBot {
   }
 
   /**
+   * Process and update TLDR immediately, bypassing time-based throttling
+   * Returns a promise that resolves when the update is complete
+   */
+  async updateImmediate(conversation: ConversationState): Promise<void> {
+    try {
+      await this.updateTLDR(conversation);
+      this.lastUpdate.set(conversation.id, Date.now());
+    } catch (error) {
+      logger.error(
+        `Failed to update TLDR for conversation ${conversation.id}:`,
+        error
+      );
+      throw error; // Re-throw so caller knows it failed
+    }
+  }
+
+  /**
    * Get compiled TLDR content for a conversation from Notion
    * Used to provide compiled context to the Session Planner
    */

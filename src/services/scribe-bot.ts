@@ -47,6 +47,22 @@ export class ScribeBot {
     this.updateQueue.set(conversation.id, timeout);
   }
 
+  /**
+   * Process messages immediately and return a promise that resolves when complete
+   * Bypasses debouncing - useful when you need to wait for processing to finish
+   */
+  async processMessagesImmediate(conversation: ConversationState): Promise<void> {
+    // Clear any pending debounced update
+    const existingTimeout = this.updateQueue.get(conversation.id);
+    if (existingTimeout) {
+      clearTimeout(existingTimeout);
+      this.updateQueue.delete(conversation.id);
+    }
+
+    // Process immediately
+    await this.updateReasoningDocument(conversation);
+  }
+
   private async updateReasoningDocument(
     conversation: ConversationState
   ): Promise<void> {
