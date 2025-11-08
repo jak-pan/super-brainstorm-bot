@@ -234,14 +234,120 @@ export class DiscordBot {
 
     try {
       const isInThread = interaction.channel?.isThread();
+      const thread = isInThread ? (interaction.channel as ThreadChannel) : undefined;
+      const channelId = interaction.channel!.id;
+      const topic =
+        interaction.options.getString("topic") ||
+        (thread ? thread.name : undefined) ||
+        "General Discussion";
 
-      if (isInThread) {
-        // Handle thread context - compile previous discussion
-        await this.handleStartInThread(interaction);
-      } else {
-        // Handle channel context - simple start
-        await this.handleStartInChannel(interaction);
+      // Check if conversation already exists (for threads)
+      if (isInThread && thread) {
+        const existingConversationId = this.activeConversations.get(thread.id);
+        if (existingConversationId) {
+          await interaction.editReply({
+            content:
+              "A conversation is already active in this thread. Use `/sbb continue` to resume if paused.",
+          });
+          return;
+        }
       }
+
+      // Get or create conversation (works for both channels and threads)
+      const conversationId = this.getOrCreateConversation(channelId, topic, thread);
+      const conversation = this.contextManager.getConversation(conversationId);
+
+      if (!conversation) {
+        await interaction.editReply({
+          content: "Error: Failed to create conversation.",
+        });
+        return;
+      }
+
+      // If in thread, fetch and add previous messages
+      let previousMessagesCount = 0;
+      if (isInThread && thread) {
+        const previousMessages = await this.fetchThreadMessages(thread);
+        previousMessagesCount = previousMessages.length;
+
+        if (previousMessages.length > 0) {
+          await interaction.editReply({
+            content: `📝 Loading previous discussion (${previousMessages.length} messages)...`,
+          });
+
+          // Convert and add messages to conversation
+          const appMessages: AppMessage[] = previousMessages.map((msg) => ({
+            id: msg.id,
+            conversationId,
+            authorId: msg.author.id,
+            authorType: msg.author.bot ? "ai" : "user",
+            content: msg.content,
+            replyTo: msg.reference?.messageId ? [msg.reference.messageId] : [],
+            timestamp: msg.createdAt,
+            discordMessageId: msg.id,
+          }));
+
+          for (const msg of appMessages) {
+            this.contextManager.addMessage(conversationId, msg);
+          }
+
+          // Trigger Scribe and TLDR to process messages
+          this.scribeBot.notifyNewMessages(conversation).catch((error) => {
+            logger.error("Scribe bot error during thread start:", error);
+          });
+
+          this.tldrBot.checkAndUpdate(conversation).catch((error) => {
+            logger.error("TLDR bot error during thread start:", error);
+          });
+
+          // Wait for Scribe/TLDR to process all messages before starting
+          // Scribe uses debouncing (default 30s), TLDR uses interval (default 300s)
+          // Wait for Scribe to complete (updateInterval + some buffer for processing)
+          const scribeWaitTime = (this.config.scribe.updateInterval + 5) * 1000;
+          await new Promise((resolve) => setTimeout(resolve, scribeWaitTime));
+
+          // Update status message
+          await interaction.editReply({
+            content: `📝 Previous discussion compiled (${previousMessages.length} messages). Starting planning...`,
+          });
+        }
+      }
+
+      // Start planning with first message or topic
+      const firstMessage = conversation.messages[0];
+      const plannerInputMessage: AppMessage = firstMessage || {
+        id: `start-${Date.now()}`,
+        conversationId,
+        authorId: "system",
+        authorType: "user",
+        content: topic,
+        replyTo: [],
+        timestamp: new Date(),
+      };
+
+      // Start the planner
+      await this.sessionPlanner.handleInitialMessage(
+        conversationId,
+        plannerInputMessage
+      );
+
+      // Prepare response message
+      const taskType = conversation.taskType || "general";
+      const preset = getModelPreset(taskType);
+      const costLimit =
+        conversation.costLimit || this.config.costLimits.conversation;
+      const imageCostLimit =
+        conversation.imageCostLimit || this.config.costLimits.image;
+
+      const messageInfo =
+        previousMessagesCount > 0
+          ? `**Previous Messages:** ${previousMessagesCount} (compiled)\n`
+          : "";
+
+      const location = isInThread ? "thread" : "channel";
+      await interaction.editReply({
+        content: `✅ Conversation started in ${location}!\n\n**Topic:** ${topic}\n**Task Type:** ${taskType}\n${messageInfo}**Models:** ${preset.conversationModels.length} selected\n**Cost Limits:** Conversation: $${costLimit} | Images: $${imageCostLimit}\n\nSession Planner is analyzing and will create a plan. Use \`/sbb start\` to approve once ready.`,
+      });
     } catch (error) {
       logger.error("Error starting conversation:", error);
       await interaction.editReply({
@@ -253,54 +359,10 @@ export class DiscordBot {
   }
 
   /**
-   * Handle start command in a channel (simple start)
+   * Fetch all messages from a Discord thread
    */
-  private async handleStartInChannel(
-    interaction: ChatInputCommandInteraction
-  ): Promise<void> {
-    const topic =
-      interaction.options.getString("topic") || "General Discussion";
-    const channelId = interaction.channel!.id;
-
-    const conversationId = this.getOrCreateConversation(channelId, topic);
-    const conversation = this.contextManager.getConversation(conversationId);
-
-    if (conversation?.status === "planning") {
-      await this.sessionPlanner.approveAndStart(conversationId);
-      await interaction.editReply(
-        `✅ Conversation started with topic: "${topic}"`
-      );
-    } else {
-      await interaction.editReply(
-        "Conversation is not in planning phase or already active."
-      );
-    }
-  }
-
-  /**
-   * Handle start command in a thread (compiles previous discussion)
-   */
-  private async handleStartInThread(
-    interaction: ChatInputCommandInteraction
-  ): Promise<void> {
-    const thread = interaction.channel as ThreadChannel;
-    const topic =
-      interaction.options.getString("topic") ||
-      thread.name ||
-      "Thread Discussion";
-
-    // Check if conversation already exists
-    const existingConversationId = this.activeConversations.get(thread.id);
-    if (existingConversationId) {
-      await interaction.editReply({
-        content:
-          "A conversation is already active in this thread. Use `/sbb continue` to resume if paused.",
-      });
-      return;
-    }
-
-    // Fetch previous messages from thread
-    const previousMessages: Message[] = [];
+  private async fetchThreadMessages(thread: ThreadChannel): Promise<Message[]> {
+    const messages: Message[] = [];
     let lastMessageId: string | undefined;
     let hasMore = true;
 
@@ -310,135 +372,25 @@ export class DiscordBot {
         options.before = lastMessageId;
       }
 
-      const messages = await thread.messages.fetch(options);
-      if (messages.size === 0) {
+      const fetched = await thread.messages.fetch(options);
+      if (fetched.size === 0) {
         hasMore = false;
         break;
       }
 
-      const sortedMessages = Array.from(messages.values()).sort(
+      const sortedMessages = Array.from(fetched.values()).sort(
         (a, b) => a.createdTimestamp - b.createdTimestamp
       );
 
-      previousMessages.push(...sortedMessages);
+      messages.push(...sortedMessages);
       lastMessageId = sortedMessages[0]?.id;
 
-      if (messages.size < 100) {
+      if (fetched.size < 100) {
         hasMore = false;
       }
     }
 
-    // Create conversation
-    const conversationId = `conv-${Date.now()}-${Math.random()
-      .toString(36)
-      .substr(2, 9)}`;
-
-    // Detect task type and get initial models
-    const taskType = detectTaskType(topic);
-    const preset = getModelPreset(taskType);
-
-    this.contextManager.createConversation(
-      conversationId,
-      thread.id,
-      topic,
-      [],
-      preset.conversationModels,
-      taskType
-    );
-
-    const conversation = this.contextManager.getConversation(conversationId);
-    if (conversation) {
-      conversation.threadId = thread.id;
-      conversation.isThread = true;
-      conversation.costLimit = this.config.costLimits.conversation;
-      conversation.imageCostLimit = this.config.costLimits.image;
-      conversation.scribeModel = preset.scribeModel;
-      conversation.tldrModel = preset.tldrModel;
-      conversation.costTracking = {
-        totalCost: 0,
-        totalInputTokens: 0,
-        totalOutputTokens: 0,
-        costsByModel: {},
-      };
-    }
-
-    this.activeConversations.set(thread.id, conversationId);
-    this.contextManager.updateStatus(conversationId, "planning");
-
-    // Add previous messages to conversation if any
-    if (previousMessages.length > 0) {
-      await interaction.editReply({
-        content: `📝 Loading previous discussion (${previousMessages.length} messages)...`,
-      });
-
-      // Convert Discord messages to app messages
-      const appMessages: AppMessage[] = previousMessages.map((msg) => ({
-        id: msg.id,
-        conversationId,
-        authorId: msg.author.id,
-        authorType: msg.author.bot ? "ai" : "user",
-        content: msg.content,
-        replyTo: msg.reference?.messageId ? [msg.reference.messageId] : [],
-        timestamp: msg.createdAt,
-        discordMessageId: msg.id,
-      }));
-
-      // Add messages to conversation
-      for (const msg of appMessages) {
-        this.contextManager.addMessage(conversationId, msg);
-      }
-
-      // Trigger Scribe and TLDR to process messages (async, non-blocking)
-      // They will process messages in the background as they normally do
-      if (conversation) {
-        this.scribeBot.notifyNewMessages(conversation).catch((error) => {
-          logger.error("Scribe bot error during thread start:", error);
-        });
-
-        this.tldrBot.checkAndUpdate(conversation).catch((error) => {
-          logger.error("TLDR bot error during thread start:", error);
-        });
-      }
-    }
-
-    if (!conversation) {
-      await interaction.editReply({
-        content: "Error: Conversation not found.",
-      });
-      return;
-    }
-
-    // Start planning immediately with the first message (or topic if no messages)
-    // Scribe and TLDR will continue processing in the background
-    const firstMessage = conversation.messages[0];
-    const plannerInputMessage: AppMessage = firstMessage || {
-      id: `thread-start-${Date.now()}`,
-      conversationId,
-      authorId: "system",
-      authorType: "user",
-      content: topic,
-      replyTo: [],
-      timestamp: new Date(),
-    };
-
-    // Start the planner with the first message/topic
-    await this.sessionPlanner.handleInitialMessage(
-      conversationId,
-      plannerInputMessage
-    );
-
-    const costLimit =
-      conversation.costLimit || this.config.costLimits.conversation;
-    const imageCostLimit =
-      conversation.imageCostLimit || this.config.costLimits.image;
-    
-    const messageInfo = previousMessages.length > 0
-      ? `**Previous Messages:** ${previousMessages.length} (being processed by Scribe/TLDR in background)\n`
-      : "";
-
-    await interaction.editReply({
-      content: `✅ Conversation started in thread!\n\n**Topic:** ${topic}\n**Task Type:** ${taskType}\n${messageInfo}**Models:** ${preset.conversationModels.length} selected\n**Cost Limits:** Conversation: $${costLimit} | Images: $${imageCostLimit}\n\nSession Planner is analyzing and will create a plan. Use \`/sbb start\` to approve once ready.`,
-    });
+    return messages;
   }
 
   /**
@@ -454,7 +406,9 @@ export class DiscordBot {
     topic: string,
     thread?: ThreadChannel
   ): string {
-    let conversationId = this.activeConversations.get(channelId);
+    // Use thread ID for threads, channel ID for channels
+    const lookupId = thread ? thread.id : channelId;
+    let conversationId = this.activeConversations.get(lookupId);
 
     if (!conversationId) {
       conversationId = `conv-${Date.now()}-${Math.random()
@@ -465,9 +419,12 @@ export class DiscordBot {
       const taskType = detectTaskType(topic);
       const preset = getModelPreset(taskType);
 
+      // Use thread ID for thread conversations, channel ID for channel conversations
+      const conversationChannelId = thread ? thread.id : channelId;
+
       this.contextManager.createConversation(
         conversationId,
-        channelId,
+        conversationChannelId,
         topic,
         [],
         preset.conversationModels,
@@ -479,7 +436,8 @@ export class DiscordBot {
       if (conversation) {
         conversation.scribeModel = preset.scribeModel;
         conversation.tldrModel = preset.tldrModel;
-        conversation.costLimit = 50; // $50 default limit
+        conversation.costLimit = this.config.costLimits.conversation;
+        conversation.imageCostLimit = this.config.costLimits.image;
         conversation.costTracking = {
           totalCost: 0,
           totalInputTokens: 0,
@@ -496,11 +454,11 @@ export class DiscordBot {
 
       // Start in planning phase
       this.contextManager.updateStatus(conversationId, "planning");
-      this.activeConversations.set(channelId, conversationId);
+      this.activeConversations.set(lookupId, conversationId);
       logger.info(
         `Created new conversation ${conversationId} for ${
           thread ? "thread" : "channel"
-        } ${channelId} (planning phase, task type: ${taskType})`
+        } ${lookupId} (planning phase, task type: ${taskType})`
       );
     }
 
