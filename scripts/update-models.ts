@@ -83,7 +83,14 @@ function getHighestPricing(provider: "openai" | "anthropic" | "grok"): {
   input: number;
   output: number;
 } {
-  const pricing = loadPricingData()[provider];
+  const pricingData = loadPricingData();
+  const pricing = pricingData[provider];
+  if (!pricing) {
+    // Default fallback
+    return provider === "grok"
+      ? { input: 0.001, output: 0.001 }
+      : { input: 0.003, output: 0.015 };
+  }
   const prices = Object.values(pricing);
   if (prices.length === 0) {
     // Default fallback
@@ -174,7 +181,8 @@ async function fetchAnthropicModels(apiKey?: string) {
     console.log(
       "ℹ️  ANTHROPIC_API_KEY not set, using known Anthropic models as fallback"
     );
-    return loadFallbackModels().anthropic;
+    const fallback = loadFallbackModels();
+    return fallback.anthropic;
   }
 
   try {
@@ -198,13 +206,15 @@ async function fetchAnthropicModels(apiKey?: string) {
     }
 
     console.warn("⚠️  No models from API, using known models as fallback");
-    return loadFallbackModels().anthropic;
+    const fallback = loadFallbackModels();
+    return fallback.anthropic;
   } catch (error) {
     console.warn(
       `⚠️  Could not fetch Anthropic models: ${error instanceof Error ? error.message : String(error)}`
     );
     console.warn("   Using known models as fallback");
-    return loadFallbackModels().anthropic;
+    const fallback = loadFallbackModels();
+    return fallback.anthropic;
   }
 }
 
@@ -359,7 +369,8 @@ async function fetchGrokModels(apiKey?: string) {
     console.log(
       "ℹ️  GROK_API_KEY not set, using known Grok models as fallback"
     );
-    return loadFallbackModels().grok;
+    const fallback = loadFallbackModels();
+    return fallback.grok;
   }
 
   try {
@@ -385,12 +396,14 @@ async function fetchGrokModels(apiKey?: string) {
       return grokModels;
     }
 
-    return loadFallbackModels().grok;
+    const fallback = loadFallbackModels();
+    return fallback.grok;
   } catch (error) {
     console.warn(
       `⚠️  Could not fetch Grok models: ${error instanceof Error ? error.message : String(error)}`
     );
-    return loadFallbackModels().grok;
+    const fallback = loadFallbackModels();
+    return fallback.grok;
   }
 }
 
