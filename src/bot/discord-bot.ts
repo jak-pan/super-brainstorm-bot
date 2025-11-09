@@ -262,7 +262,7 @@ export class DiscordBot {
         return;
       }
 
-      let topic =
+      const topic =
         topicOption ||
         (thread ? thread.name : undefined) ||
         "General Discussion";
@@ -279,14 +279,14 @@ export class DiscordBot {
             this.client.user!.id
           );
           const permissions = channel.permissionsFor(botMember!);
-          
+
           // Check for Send Messages permission (needed to send starter message)
           if (!permissions?.has("SendMessages")) {
             throw new Error(
               "Bot does not have permission to send messages in this channel. Please grant 'Send Messages' permission."
             );
           }
-          
+
           // Check for Create Public Threads permission
           if (!permissions?.has("CreatePublicThreads")) {
             throw new Error(
@@ -297,7 +297,7 @@ export class DiscordBot {
           // Create thread with topic as name (truncate to 100 chars if needed)
           const threadName =
             topic.length > 100 ? topic.substring(0, 97) + "..." : topic;
-          
+
           // First, send a message in the channel, then create thread from it
           const starterMessage = await channel.send({
             content: topic,
