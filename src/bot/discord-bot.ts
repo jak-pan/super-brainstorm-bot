@@ -102,8 +102,8 @@ export class DiscordBot {
     });
 
     this.client.on("messageCreate", async (message: Message) => {
-      // Ignore bot messages (except our own processing)
-      if (message.author.bot && message.author.id !== this.client.user?.id) {
+      // Ignore all bot messages (including our own)
+      if (message.author.bot) {
         return;
       }
 
@@ -169,8 +169,9 @@ export class DiscordBot {
         // Add message to context first
         this.contextManager.addMessage(conversationId, appMessage);
 
-        // If this is the first message, start planning
-        if (conversation.messages.length === 1) {
+        // If this is the first message and planning hasn't started yet, start planning
+        // Check if planningState exists to avoid duplicate calls
+        if (conversation.messages.length === 1 && !conversation.planningState) {
           await this.sessionPlanner.handleInitialMessage(
             conversationId,
             appMessage
@@ -178,7 +179,7 @@ export class DiscordBot {
           // If questions were asked, stay in planning mode
           // If plan was created, it will wait for /sbb start
           return;
-        } else {
+        } else if (conversation.messages.length > 1) {
           // Handle planning response - this creates plan if questions were answered
           await this.sessionPlanner.handlePlanningResponse(
             conversationId,
@@ -188,6 +189,8 @@ export class DiscordBot {
           // Stay in planning mode until user calls /sbb start
           return;
         }
+        // If planning already started (planningState exists), just return
+        return;
       }
 
       // Handle active conversation

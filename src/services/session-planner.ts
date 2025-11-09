@@ -38,6 +38,7 @@ export class SessionPlanner {
   private planningTimeouts: Map<string, NodeJS.Timeout> = new Map();
   private messageCallback?: PlannerCallback;
   private readonly defaultModel = "anthropic/claude-opus-4.1"; // Default model for session planner
+  private planningInProgress: Set<string> = new Set(); // Track conversations currently being planned
 
   /**
    * Create a new session planner
@@ -82,6 +83,52 @@ export class SessionPlanner {
       throw new Error(`Conversation ${conversationId} not found`);
     }
 
+    // Check if planning is already in progress for this conversation
+    if (this.planningInProgress.has(conversationId)) {
+      logger.warn(
+        `Planning already in progress for conversation ${conversationId}, skipping duplicate call`
+      );
+      // Return existing state if available
+      if (conversation.planningState?.plan) {
+        return {
+          type: "plan",
+          plan: conversation.planningState.plan,
+        };
+      }
+      if (conversation.planningState?.questions.length) {
+        return {
+          type: "questions",
+          questions: conversation.planningState.questions,
+        };
+      }
+      // Planning in progress but no result yet
+      return {
+        type: "questions",
+        questions: [],
+      };
+    }
+
+    // If planning has already started, return existing state
+    if (conversation.status === "planning" && conversation.planningState) {
+      // If plan already exists, return it
+      if (conversation.planningState.plan) {
+        return {
+          type: "plan",
+          plan: conversation.planningState.plan,
+        };
+      }
+      // If questions were already asked, return them
+      if (conversation.planningState.questions.length > 0) {
+        return {
+          type: "questions",
+          questions: conversation.planningState.questions,
+        };
+      }
+    }
+
+    // Mark planning as in progress
+    this.planningInProgress.add(conversationId);
+
     // Set status to planning
     this.contextManager.updateStatus(conversationId, "planning");
 
@@ -97,13 +144,18 @@ export class SessionPlanner {
       conversation.planningState = planningState;
     }
 
-    // Analyze message and generate questions - returns result
-    const result = await this.analyzeAndAskQuestions(conversationId, message);
+    try {
+      // Analyze message and generate questions - returns result
+      const result = await this.analyzeAndAskQuestions(conversationId, message);
 
-    // Set timeout for planning phase
-    this.setPlanningTimeout(conversationId);
+      // Set timeout for planning phase
+      this.setPlanningTimeout(conversationId);
 
-    return result;
+      return result;
+    } finally {
+      // Remove from in-progress set
+      this.planningInProgress.delete(conversationId);
+    }
   }
 
   /**
@@ -249,29 +301,44 @@ export class SessionPlanner {
       maxContextWindowPercent: number;
     };
   }> {
+    const conversation = this.contextManager.getConversation(conversationId);
+    if (!conversation) {
+      throw new Error(`Conversation ${conversationId} not found`);
+    }
+
+    // If plan already exists, return it
+    if (
+      conversation.planningState?.plan &&
+      conversation.planningState.parameters
+    ) {
+      return {
+        plan: conversation.planningState.plan,
+        expandedTopic:
+          conversation.planningState.expandedTopic || conversation.topic,
+        parameters: conversation.planningState.parameters,
+      };
+    }
+
     const adapter = this.adapterRegistry.getAdapter(this.defaultModel);
     if (!adapter) {
       logger.error(`Session planner adapter ${this.defaultModel} not found`);
       // Fallback: use default plan
       await this.createDefaultPlan(conversationId);
-      const conversation = this.contextManager.getConversation(conversationId);
+      const conversationAfter =
+        this.contextManager.getConversation(conversationId);
       if (
-        conversation?.planningState?.plan &&
-        conversation.planningState.parameters
+        conversationAfter?.planningState?.plan &&
+        conversationAfter.planningState.parameters
       ) {
         return {
-          plan: conversation.planningState.plan,
+          plan: conversationAfter.planningState.plan,
           expandedTopic:
-            conversation.planningState.expandedTopic || conversation.topic,
-          parameters: conversation.planningState.parameters,
+            conversationAfter.planningState.expandedTopic ||
+            conversationAfter.topic,
+          parameters: conversationAfter.planningState.parameters,
         };
       }
       throw new Error("Failed to create default plan");
-    }
-
-    const conversation = this.contextManager.getConversation(conversationId);
-    if (!conversation) {
-      throw new Error(`Conversation ${conversationId} not found`);
     }
 
     const allMessages = this.contextManager.getMessages(conversationId);
