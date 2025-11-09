@@ -98,12 +98,12 @@ The Super Brainstorm Bot is a Discord-based multi-AI collaboration system that e
   * Generate images using multiple image generation models in parallel
   * Extract prompts from TLDR summaries or linked Discord messages
   * Support image input via attachments (for future vision model integration)
-  * Use default image models: DALL-E 3 and Gemini 2.5 Flash
+  * Use default image models: GPT-5 Image (openai/gpt-5-image) and Gemini 2.5 Flash Image (google/gemini-2.5-flash-image)
   * Track image generation models as active agents
   * Handle image generation errors gracefully
 * **Default Models**:
-  * `openai/dall-e-3` - DALL-E 3 for high-quality image generation
-  * `google/gemini-2.0-flash-exp:free` - Gemini 2.5 Flash (if supports image generation)
+  * `openai/gpt-5-image` - GPT-5 Image for high-quality image generation
+  * `google/gemini-2.5-flash-image` - Gemini 2.5 Flash Image for image generation
 * **Features**:
   * Can be triggered by `/image` slash command
   * Accepts message links to extract prompts from previous messages
@@ -149,6 +149,10 @@ The Super Brainstorm Bot is a Discord-based multi-AI collaboration system that e
   * Store TLDR summaries (from TLDR bot)
   * Provide context retrieval API
   * Provide latest reasoning content retrieval (for TLDR bot)
+* **Implementation Details**:
+  * Database property can be "Topic" or "Name" (for backward compatibility)
+  * Subpage identification: Child page blocks don't expose titles directly, so pages are fetched individually to check their title properties when locating subpages
+  * Cost tracking uses OpenRouter API `total_cost` field directly
 
 ### 9. Web Search Integration
 
@@ -1336,7 +1340,7 @@ flowchart TD
   * Tracks cost per model
   * Tracks input/output tokens per model
   * Displays cost information in responses and status commands
-* **Cost Calculation**: Uses OpenRouter model pricing (fetched dynamically or fallback pricing)
+* **Cost Calculation**: Uses OpenRouter API `total_cost` field directly from API responses. Cost is checked after each response generation to prevent exceeding limits. Per-token cost breakdown is not available without additional API calls to fetch pricing data.
 * **Resume Protection**: `/continue` command checks cost limit before resuming paused conversations
 
 ## Agent Management
@@ -1414,7 +1418,7 @@ All commands use the `/sbb` prefix. The bot also processes regular messages in c
   * `message-link`: Optional. Link to a Discord message to use as prompt (extracts content automatically)
   * `prompt`: Optional. Direct text prompt for image generation
   * `attachment`: Optional. Image attachment to use as reference
-  * Default models: GPT-5 Image and Gemini 2.5 Flash Image (configurable in `default-settings.json`)
+  * Default models: `openai/gpt-5-image` and `google/gemini-2.5-flash-image` (configurable in `default-settings.json`)
   * Generates multiple images in parallel
   * Separate cost tracking for image generation
   * Image generation is automatically blocked when cost limit ($2 default) is reached

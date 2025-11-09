@@ -14,6 +14,15 @@ export type PlannerCallback = (
 ) => Promise<void>;
 
 /**
+ * Result of planning operation
+ */
+export type PlanningResult = {
+  type: "plan" | "questions";
+  plan?: string;
+  questions?: string[];
+};
+
+/**
  * Session Planner Bot (Session Moderator) - Plans, moderates, and oversees conversations
  *
  * Responsibilities:
@@ -39,6 +48,7 @@ export class SessionPlanner {
   private messageCallback?: PlannerCallback;
   private readonly defaultModel = "anthropic/claude-opus-4.1"; // Default model for session planner
   private planningInProgress: Set<string> = new Set(); // Track conversations currently being planned
+  private planningPromises: Map<string, Promise<PlanningResult>> = new Map(); // Promise-based locking
 
   /**
    * Create a new session planner
@@ -73,42 +83,22 @@ export class SessionPlanner {
   async handleInitialMessage(
     conversationId: string,
     message: Message
-  ): Promise<{
-    type: "plan" | "questions";
-    plan?: string;
-    questions?: string[];
-  }> {
+  ): Promise<PlanningResult> {
     const conversation = this.contextManager.getConversation(conversationId);
     if (!conversation) {
       throw new Error(`Conversation ${conversationId} not found`);
     }
 
-    // Check if planning is already in progress for this conversation
-    if (this.planningInProgress.has(conversationId)) {
-      logger.warn(
-        `Planning already in progress for conversation ${conversationId}, skipping duplicate call`
+    // Check if planning is already in progress for this conversation (promise-based lock)
+    const existingPromise = this.planningPromises.get(conversationId);
+    if (existingPromise) {
+      logger.info(
+        `Planning already in progress for conversation ${conversationId}, returning existing promise`
       );
-      // Return existing state if available
-      if (conversation.planningState?.plan) {
-        return {
-          type: "plan",
-          plan: conversation.planningState.plan,
-        };
-      }
-      if (conversation.planningState?.questions.length) {
-        return {
-          type: "questions",
-          questions: conversation.planningState.questions,
-        };
-      }
-      // Planning in progress but no result yet
-      return {
-        type: "questions",
-        questions: [],
-      };
+      return existingPromise;
     }
 
-    // If planning has already started, return existing state
+    // Check if planning has already completed
     if (conversation.status === "planning" && conversation.planningState) {
       // If plan already exists, return it
       if (conversation.planningState.plan) {
@@ -126,9 +116,6 @@ export class SessionPlanner {
       }
     }
 
-    // Mark planning as in progress
-    this.planningInProgress.add(conversationId);
-
     // Set status to planning
     this.contextManager.updateStatus(conversationId, "planning");
 
@@ -144,18 +131,33 @@ export class SessionPlanner {
       conversation.planningState = planningState;
     }
 
-    try {
-      // Analyze message and generate questions - returns result
-      const result = await this.analyzeAndAskQuestions(conversationId, message);
+    // Create planning promise for locking
+    const planningPromise = (async (): Promise<PlanningResult> => {
+      try {
+        // Mark planning as in progress
+        this.planningInProgress.add(conversationId);
 
-      // Set timeout for planning phase
-      this.setPlanningTimeout(conversationId);
+        // Analyze message and generate questions - returns result
+        const result = await this.analyzeAndAskQuestions(
+          conversationId,
+          message
+        );
 
-      return result;
-    } finally {
-      // Remove from in-progress set
-      this.planningInProgress.delete(conversationId);
-    }
+        // Set timeout for planning phase
+        this.setPlanningTimeout(conversationId);
+
+        return result;
+      } finally {
+        // Remove from in-progress set and promise map
+        this.planningInProgress.delete(conversationId);
+        this.planningPromises.delete(conversationId);
+      }
+    })();
+
+    // Store promise for concurrent requests
+    this.planningPromises.set(conversationId, planningPromise);
+
+    return planningPromise;
   }
 
   /**
@@ -165,11 +167,7 @@ export class SessionPlanner {
   private async analyzeAndAskQuestions(
     conversationId: string,
     initialMessage: Message
-  ): Promise<{
-    type: "plan" | "questions";
-    plan?: string;
-    questions?: string[];
-  }> {
+  ): Promise<PlanningResult> {
     const adapter = this.adapterRegistry.getAdapter(this.defaultModel);
     if (!adapter) {
       logger.error(`Session planner adapter ${this.defaultModel} not found`);

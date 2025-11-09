@@ -12,6 +12,8 @@ import { ImageBot } from "./services/image-bot.js";
 import { SessionPlanner, PlannerCallback } from "./services/session-planner.js";
 import { DiscordBot } from "./bot/discord-bot.js";
 import { logger } from "./utils/logger.js";
+import { getConversationChannelId } from "./utils/conversation-utils.js";
+import { DISCORD_CHANNEL_TYPES } from "./utils/constants.js";
 import type { AIResponse } from "./types/index.js";
 import type { Message as DiscordMessage } from "discord.js";
 import { TextChannel, ThreadChannel } from "discord.js";
@@ -25,10 +27,10 @@ async function main() {
     logger.info("Configuration loaded");
 
     // Initialize Notion service
-  const notionService = new NotionService(
-    config.notion.apiKey,
-    config.notion.databaseId
-  );
+    const notionService = new NotionService(
+      config.notion.apiKey,
+      config.notion.databaseId
+    );
     logger.info("Notion service initialized");
 
     // Initialize adapter registry
@@ -55,11 +57,8 @@ async function main() {
       const conversation = contextManager.getConversation(
         response.conversationId
       );
-      const channelId =
-        conversation?.isThread && conversation.threadId
-          ? conversation.threadId
-          : conversation?.channelId;
-      
+      const channelId = getConversationChannelId(conversation);
+
       if (!channelId) {
         logger.warn(
           `No channel ID found for conversation ${response.conversationId}`
@@ -76,8 +75,10 @@ async function main() {
       }
 
       // Type guard for TextChannel or ThreadChannel
-      if (channel.type !== 0 && channel.type !== 11) {
-        // 0 = GUILD_TEXT, 11 = GUILD_PUBLIC_THREAD
+      if (
+        channel.type !== DISCORD_CHANNEL_TYPES.GUILD_TEXT &&
+        channel.type !== DISCORD_CHANNEL_TYPES.GUILD_PUBLIC_THREAD
+      ) {
         logger.warn(`Channel ${channelId} is not a text channel or thread`);
         return;
       }
@@ -105,19 +106,18 @@ async function main() {
       if (conversationId) {
         const conversation = contextManager.getConversation(conversationId);
         if (conversation) {
-          const channelId =
-            conversation.isThread && conversation.threadId
-              ? conversation.threadId
-              : conversation.channelId;
-          
+          const channelId = getConversationChannelId(conversation);
+
           if (channelId) {
             // Try cache first
-            let channel = discordBotInstance.client.channels.cache.get(channelId);
-            
+            let channel =
+              discordBotInstance.client.channels.cache.get(channelId);
+
             // If not in cache, try to fetch it
             if (!channel) {
               try {
-                const fetchedChannel = await discordBotInstance.client.channels.fetch(channelId);
+                const fetchedChannel =
+                  await discordBotInstance.client.channels.fetch(channelId);
                 if (fetchedChannel) {
                   channel = fetchedChannel;
                 }
@@ -125,8 +125,12 @@ async function main() {
                 logger.warn(`Failed to fetch channel ${channelId}:`, error);
               }
             }
-            
-            if (channel && (channel.type === 0 || channel.type === 11)) {
+
+            if (
+              channel &&
+              (channel.type === DISCORD_CHANNEL_TYPES.GUILD_TEXT ||
+                channel.type === DISCORD_CHANNEL_TYPES.GUILD_PUBLIC_THREAD)
+            ) {
               targetChannel = channel as TextChannel | ThreadChannel;
             }
           }

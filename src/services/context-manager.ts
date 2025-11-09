@@ -1,6 +1,7 @@
 import type { Message, ConversationState, Config } from "../types/index.js";
 import { NotionService } from "./notion-service.js";
 import { logger } from "../utils/logger.js";
+import { CONTEXT_REFRESH_KEEP_MESSAGES } from "../utils/constants.js";
 
 /**
  * Context Manager - Manages conversation context and memory
@@ -109,7 +110,9 @@ export class ContextManager {
     }
 
     // Check message count threshold instead of context window
-    if (conversation.messageCount > this.config.limits.contextRefreshThreshold) {
+    if (
+      conversation.messageCount > this.config.limits.contextRefreshThreshold
+    ) {
       logger.info(
         `Refreshing context for conversation ${conversationId} (${conversation.messageCount} messages)`
       );
@@ -120,7 +123,9 @@ export class ContextManager {
 
       if (compressedContext) {
         // Keep only recent messages and prepend compressed context
-        const recentMessages = conversation.messages.slice(-10); // Keep last 10 messages
+        const recentMessages = conversation.messages.slice(
+          -CONTEXT_REFRESH_KEEP_MESSAGES
+        );
         const contextMessage: Message = {
           id: `context-${Date.now()}`,
           conversationId,
@@ -150,7 +155,9 @@ export class ContextManager {
     const conversation = this.conversations.get(conversationId);
     if (!conversation) return false;
 
-    return conversation.messageCount > this.config.limits.contextRefreshThreshold;
+    return (
+      conversation.messageCount > this.config.limits.contextRefreshThreshold
+    );
   }
 
   /**

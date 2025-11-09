@@ -2,6 +2,8 @@ import type { Message, AIResponse, AIAdapter, Config } from "../types/index.js";
 import { ContextManager } from "./context-manager.js";
 import { logger } from "../utils/logger.js";
 import { PromptLoader } from "../utils/prompt-loader.js";
+import { checkCostLimit } from "../utils/conversation-utils.js";
+import { MAX_MESSAGE_REFERENCES } from "../utils/constants.js";
 // Cost is now provided directly by OpenRouter API, no manual calculation needed
 import { AdapterRegistry } from "../adapters/index.js";
 import PQueue from "p-queue";
@@ -73,14 +75,16 @@ export class ConversationCoordinator {
     }
 
     // Check cost limit
-    const costLimit =
-      conversation.costLimit || this.config.costLimits.conversation;
-    const currentCost = conversation.costTracking?.totalCost || 0;
-    if (currentCost >= costLimit) {
+    const costCheck = checkCostLimit(
+      conversation,
+      "conversation",
+      this.config.costLimits.conversation
+    );
+    if (costCheck.exceeded) {
       logger.warn(
-        `Conversation ${conversationId} reached cost limit: $${currentCost.toFixed(
+        `Conversation ${conversationId} reached cost limit: $${costCheck.current.toFixed(
           2
-        )} / $${costLimit}`
+        )} / $${costCheck.limit}`
       );
       this.contextManager.updateStatus(conversationId, "paused");
       return;
@@ -165,7 +169,7 @@ export class ConversationCoordinator {
         );
       })
       .map((r) => r.message.id)
-      .slice(0, 5); // Max 5 message references
+      .slice(0, MAX_MESSAGE_REFERENCES);
 
     // Get adapters for selected models, excluding disabled agents
     const selectedModels = conversation.selectedModels || [];
@@ -254,11 +258,13 @@ export class ConversationCoordinator {
     const conversation = this.contextManager.getConversation(conversationId);
     if (!conversation) return null;
 
-    // Check cost limit before generating response
-    const costLimit =
-      conversation.costLimit || this.config.costLimits.conversation;
-    const currentCost = conversation.costTracking?.totalCost || 0;
-    if (currentCost >= costLimit) {
+    // Check cost limit before generating response (check after generation too)
+    const costCheck = checkCostLimit(
+      conversation,
+      "conversation",
+      this.config.costLimits.conversation
+    );
+    if (costCheck.exceeded) {
       logger.warn(
         `Cost limit reached for conversation ${conversationId}, pausing`
       );
@@ -308,22 +314,30 @@ export class ConversationCoordinator {
       response.outputTokens;
     conversation.costTracking.costsByModel[modelId].requestCount += 1;
 
-    // Check if we've exceeded cost limit after this response
-    if (conversation.costTracking.totalCost >= costLimit) {
+    // Check if we've exceeded cost limit after this response (just check after as requested)
+    const postCostCheck = checkCostLimit(
+      conversation,
+      "conversation",
+      this.config.costLimits.conversation
+    );
+    if (postCostCheck.exceeded) {
       logger.warn(
-        `Cost limit reached after response: $${conversation.costTracking.totalCost.toFixed(
+        `Cost limit reached after response: $${postCostCheck.current.toFixed(
           2
-        )} / $${costLimit}`
+        )} / $${postCostCheck.limit}`
       );
       this.contextManager.updateStatus(conversationId, "paused");
     }
 
     // Add cost to response
+    // Cost comes directly from OpenRouter API response (total_cost field)
     response.cost = cost;
+    // Cost breakdown: OpenRouter provides total cost, not per-token breakdown
+    // If detailed breakdown is needed, it would require fetching pricing from OpenRouter API
     response.costBreakdown = {
-      inputCost: (response.inputTokens / 1000) * 0.002, // Will be more accurate with actual pricing
-      outputCost: (response.outputTokens / 1000) * 0.01,
-      totalCost: cost,
+      inputCost: 0, // Not available from API without pricing lookup
+      outputCost: 0, // Not available from API without pricing lookup
+      totalCost: cost, // This is the accurate total cost from OpenRouter
     };
 
     // Create message from response

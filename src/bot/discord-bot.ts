@@ -10,7 +10,7 @@ import {
   ChatInputCommandInteraction,
   MessageFlags,
 } from "discord.js";
-import type { Config } from "../types/index.js";
+import type { Config, ConversationState } from "../types/index.js";
 import { ConversationCoordinator } from "../services/conversation-coordinator.js";
 import { ContextManager } from "../services/context-manager.js";
 import { ScribeBot } from "../services/scribe-bot.js";
@@ -20,6 +20,7 @@ import { SessionPlanner } from "../services/session-planner.js";
 import { logger } from "../utils/logger.js";
 import { DiscordRateLimiter } from "../utils/rate-limiter.js";
 import { retryWithBackoff } from "../utils/retry.js";
+import { checkCostLimit } from "../utils/conversation-utils.js";
 import type { Message as AppMessage } from "../types/index.js";
 import {
   getModelPreset,
@@ -229,6 +230,191 @@ export class DiscordBot {
   }
 
   /**
+   * Create a thread if needed (when starting in a channel)
+   * Returns the thread or undefined if not needed
+   */
+  private async createThreadIfNeeded(
+    channel: TextChannel,
+    topic: string,
+    interaction: ChatInputCommandInteraction
+  ): Promise<ThreadChannel | undefined> {
+    try {
+      logger.info(`Interaction guild ID: ${interaction.guild?.id}`);
+      logger.info(`Bot user ID: ${this.client.user?.id}`);
+      // Check if bot has required permissions
+      logger.info(`Fetching bot member...`);
+      const botMember = await interaction.guild?.members.fetch(
+        this.client.user!.id
+      );
+      const permissions = channel.permissionsFor(botMember!);
+
+      logger.info(
+        `Checking permissions for thread creation in channel ${channel.id}`
+      );
+
+      // Check for Send Messages permission (needed to send starter message)
+      const hasSendMessages = permissions?.has("SendMessages");
+      logger.info(
+        `Send Messages permission: ${
+          hasSendMessages ? "✅ Granted" : "❌ Missing"
+        }`
+      );
+
+      if (!hasSendMessages) {
+        throw new Error(
+          "Bot does not have permission to send messages in this channel. Please grant 'Send Messages' permission."
+        );
+      }
+
+      // Check for Create Public Threads permission
+      const hasCreateThreads = permissions?.has("CreatePublicThreads");
+      logger.info(
+        `Create Public Threads permission: ${
+          hasCreateThreads ? "✅ Granted" : "❌ Missing"
+        }`
+      );
+
+      if (!hasCreateThreads) {
+        throw new Error(
+          "Bot does not have permission to create threads. Please grant 'Create Public Threads' permission."
+        );
+      }
+
+      logger.info(
+        `✅ All required permissions granted. Proceeding with thread creation.`
+      );
+
+      // Create thread with topic as name (truncate to 50 chars if needed)
+      const threadName =
+        topic.length > 50 ? topic.substring(0, 97) + "..." : topic;
+
+      // First, send a message in the channel, then create thread from it
+      logger.info(`Sending starter message in channel ${channel.id}...`);
+      const starterMessage = await channel.send({
+        content: topic,
+      });
+      logger.info(
+        `✅ Starter message sent (ID: ${starterMessage.id}). Creating thread...`
+      );
+
+      // Create thread from the message
+      const newThread = await starterMessage.startThread({
+        name: threadName,
+        autoArchiveDuration: 1440, // 24 hours
+        reason: "Super Brainstorm Bot conversation",
+      });
+      logger.info(
+        `✅ Thread created successfully (ID: ${newThread.id}, Name: ${threadName})`
+      );
+
+      return newThread;
+    } catch (error) {
+      logger.error("Error creating thread:", error);
+      throw error;
+    }
+  }
+
+  /**
+   * Compile previous messages in a thread using Scribe and TLDR
+   */
+  private async compilePreviousMessages(
+    conversation: ConversationState,
+    _thread: ThreadChannel,
+    interaction: ChatInputCommandInteraction
+  ): Promise<void> {
+    if (conversation.messages.length <= 1) {
+      return;
+    }
+
+    await interaction.editReply({
+      content: `📝 Compiling previous discussion before starting...`,
+    });
+
+    try {
+      await this.scribeBot.processMessagesImmediate(conversation);
+      await this.tldrBot.updateImmediate(conversation);
+      await interaction.editReply({
+        content: `✅ Previous discussion compiled. Starting conversation...`,
+      });
+    } catch (error) {
+      logger.error("Error compiling previous discussion:", error);
+      // Continue anyway - compilation failure shouldn't block conversation start
+    }
+  }
+
+  /**
+   * Handle existing conversation with a plan - approve and start
+   */
+  private async handleExistingPlan(
+    conversation: ConversationState,
+    isInThread: boolean,
+    thread: ThreadChannel | undefined,
+    interaction: ChatInputCommandInteraction
+  ): Promise<void> {
+    // Compile previous messages if in thread
+    if (isInThread && thread) {
+      await this.compilePreviousMessages(conversation, thread, interaction);
+    }
+
+    // Approve and start
+    await this.sessionPlanner.approveAndStart(conversation.id);
+    await interaction.editReply({
+      content: `✅ Conversation started! All participants can now engage.`,
+    });
+  }
+
+  /**
+   * Add previous messages from thread to conversation
+   */
+  private async addPreviousThreadMessages(
+    conversationId: string,
+    thread: ThreadChannel,
+    isNewThread: boolean
+  ): Promise<void> {
+    // If thread was just created, add the first message (topic) to the conversation
+    if (!isNewThread) {
+      try {
+        const messages = await thread.messages.fetch({ limit: 1 });
+        const firstThreadMessage = messages.first();
+        if (firstThreadMessage) {
+          const appMessage: AppMessage = {
+            id: firstThreadMessage.id,
+            conversationId,
+            authorId: firstThreadMessage.author.id,
+            authorType: "user",
+            content: firstThreadMessage.content,
+            replyTo: [],
+            timestamp: firstThreadMessage.createdAt,
+            discordMessageId: firstThreadMessage.id,
+          };
+          this.contextManager.addMessage(conversationId, appMessage);
+        }
+      } catch (error) {
+        logger.warn("Failed to fetch first thread message:", error);
+      }
+    } else {
+      // If in existing thread, fetch and add previous messages
+      const previousMessages = await this.fetchThreadMessages(thread);
+      if (previousMessages.length > 0) {
+        const appMessages: AppMessage[] = previousMessages.map((msg) => ({
+          id: msg.id,
+          conversationId,
+          authorId: msg.author.id,
+          authorType: msg.author.bot ? "ai" : "user",
+          content: msg.content,
+          replyTo: msg.reference?.messageId ? [msg.reference.messageId] : [],
+          timestamp: msg.createdAt,
+          discordMessageId: msg.id,
+        }));
+
+        for (const msg of appMessages) {
+          this.contextManager.addMessage(conversationId, msg);
+        }
+      }
+    }
+  }
+
+  /**
    * Handle /sbb start command
    * If no plan exists: creates plan and auto-starts
    * If plan exists: approves and starts (with compilation if in thread)
@@ -277,81 +463,12 @@ export class DiscordBot {
         });
 
         try {
-          logger.info(`Interaction guild ID: ${interaction.guild?.id}`);
-          logger.info(`Bot user ID: ${this.client.user?.id}`);
-          // Check if bot has required permissions
-          logger.info(`Fetching bot member...`);
-          const botMember = await interaction.guild?.members.fetch(
-            this.client.user!.id
-          );
-          const permissions = channel.permissionsFor(botMember!);
-
-          logger.info(
-            `Checking permissions for thread creation in channel ${channelId}`
-          );
-
-          // Check for Send Messages permission (needed to send starter message)
-          const hasSendMessages = permissions?.has("SendMessages");
-          logger.info(
-            `Send Messages permission: ${
-              hasSendMessages ? "✅ Granted" : "❌ Missing"
-            }`
-          );
-
-          if (!hasSendMessages) {
-            throw new Error(
-              "Bot does not have permission to send messages in this channel. Please grant 'Send Messages' permission."
-            );
+          thread = await this.createThreadIfNeeded(channel, topic, interaction);
+          if (thread) {
+            await interaction.editReply({
+              content: `✅ Thread created! Starting conversation in <#${thread.id}>...`,
+            });
           }
-
-          // Check for Create Public Threads permission
-          const hasCreateThreads = permissions?.has("CreatePublicThreads");
-          logger.info(
-            `Create Public Threads permission: ${
-              hasCreateThreads ? "✅ Granted" : "❌ Missing"
-            }`
-          );
-
-          if (!hasCreateThreads) {
-            throw new Error(
-              "Bot does not have permission to create threads. Please grant 'Create Public Threads' permission."
-            );
-          }
-
-          logger.info(
-            `✅ All required permissions granted. Proceeding with thread creation.`
-          );
-
-          // Create thread with topic as name (truncate to 50 chars if needed)
-          const threadName =
-            topic.length > 50 ? topic.substring(0, 97) + "..." : topic;
-
-          // First, send a message in the channel, then create thread from it
-          logger.info(`Sending starter message in channel ${channelId}...`);
-          const starterMessage = await channel.send({
-            content: topic,
-          });
-          logger.info(
-            `✅ Starter message sent (ID: ${starterMessage.id}). Creating thread...`
-          );
-
-          // Create thread from the message
-          const newThread = await starterMessage.startThread({
-            name: threadName,
-            autoArchiveDuration: 1440, // 24 hours
-            reason: "Super Brainstorm Bot conversation",
-          });
-          logger.info(
-            `✅ Thread created successfully (ID: ${newThread.id}, Name: ${threadName})`
-          );
-
-          // Use the new thread for the conversation
-          thread = newThread;
-
-          // Update the interaction reply to point to the thread
-          await interaction.editReply({
-            content: `✅ Thread created! Starting conversation in <#${newThread.id}>...`,
-          });
         } catch (error) {
           logger.error("Error creating thread:", error);
           await interaction.editReply({
@@ -370,10 +487,7 @@ export class DiscordBot {
         });
         return;
       }
-      const existingConversationId = this.activeConversations.get(lookupId);
-      let conversation = existingConversationId
-        ? this.contextManager.getConversation(existingConversationId)
-        : null;
+      let conversation = this.getConversationForChannel(channelId, thread);
 
       // If conversation exists and has a plan, approve and start
       if (
@@ -381,28 +495,12 @@ export class DiscordBot {
         conversation.status === "planning" &&
         conversation.planningState?.plan
       ) {
-        // Compile previous messages if in thread
-        if (isInThread && thread && conversation.messages.length > 1) {
-          await interaction.editReply({
-            content: `📝 Compiling previous discussion before starting...`,
-          });
-
-          try {
-            await this.scribeBot.processMessagesImmediate(conversation);
-            await this.tldrBot.updateImmediate(conversation);
-            await interaction.editReply({
-              content: `✅ Previous discussion compiled. Starting conversation...`,
-            });
-          } catch (error) {
-            logger.error("Error compiling previous discussion:", error);
-          }
-        }
-
-        // Approve and start
-        await this.sessionPlanner.approveAndStart(existingConversationId!);
-        await interaction.editReply({
-          content: `✅ Conversation started! All participants can now engage.`,
-        });
+        await this.handleExistingPlan(
+          conversation,
+          isInThread,
+          thread,
+          interaction
+        );
         return;
       }
 
@@ -423,63 +521,28 @@ export class DiscordBot {
           topic,
           thread
         );
-        conversation = this.contextManager.getConversation(conversationId);
+        const createdConversation =
+          this.contextManager.getConversation(conversationId);
 
-        if (!conversation) {
+        if (!createdConversation) {
           await interaction.editReply({
             content: "Error: Failed to create conversation.",
           });
           return;
         }
 
-        // If thread was just created, add the first message (topic) to the conversation
-        if (thread && !isInThread) {
-          // Get the first message from the thread (the topic message we just posted)
-          try {
-            const messages = await thread.messages.fetch({ limit: 1 });
-            const firstThreadMessage = messages.first();
-            if (firstThreadMessage) {
-              const appMessage: AppMessage = {
-                id: firstThreadMessage.id,
-                conversationId,
-                authorId: firstThreadMessage.author.id,
-                authorType: "user",
-                content: firstThreadMessage.content,
-                replyTo: [],
-                timestamp: firstThreadMessage.createdAt,
-                discordMessageId: firstThreadMessage.id,
-              };
-              this.contextManager.addMessage(conversationId, appMessage);
-            }
-          } catch (error) {
-            logger.warn("Failed to fetch first thread message:", error);
-          }
-        }
+        conversation = createdConversation;
 
-        // If in existing thread, fetch and add previous messages
-        if (isInThread && thread) {
-          const previousMessages = await this.fetchThreadMessages(thread);
-          if (previousMessages.length > 0) {
-            const appMessages: AppMessage[] = previousMessages.map((msg) => ({
-              id: msg.id,
-              conversationId,
-              authorId: msg.author.id,
-              authorType: msg.author.bot ? "ai" : "user",
-              content: msg.content,
-              replyTo: msg.reference?.messageId
-                ? [msg.reference.messageId]
-                : [],
-              timestamp: msg.createdAt,
-              discordMessageId: msg.id,
-            }));
-
-            for (const msg of appMessages) {
-              this.contextManager.addMessage(conversationId, msg);
-            }
-          }
+        // Add previous messages from thread if applicable
+        if (thread) {
+          await this.addPreviousThreadMessages(
+            conversationId,
+            thread,
+            !isInThread
+          );
         }
       } else {
-        conversationId = existingConversationId!;
+        conversationId = conversation.id;
       }
 
       // Start planning with first message or topic
@@ -516,17 +579,8 @@ export class DiscordBot {
       // Plan was created, auto-start
       if (planningResult.type === "plan") {
         // Compile previous messages if in thread before starting
-        if (isInThread && thread && conversation.messages.length > 1) {
-          await interaction.editReply({
-            content: `📝 Compiling previous discussion before starting...`,
-          });
-
-          try {
-            await this.scribeBot.processMessagesImmediate(conversation);
-            await this.tldrBot.updateImmediate(conversation);
-          } catch (error) {
-            logger.error("Error compiling previous discussion:", error);
-          }
+        if (isInThread && thread) {
+          await this.compilePreviousMessages(conversation, thread, interaction);
         }
 
         // Auto-start
@@ -566,26 +620,23 @@ export class DiscordBot {
         "General Discussion";
 
       // Check if conversation already exists
-      const lookupId = thread ? thread.id : channelId;
-      const existingConversationId = this.activeConversations.get(lookupId);
-      if (existingConversationId) {
-        const existingConversation = this.contextManager.getConversation(
-          existingConversationId
-        );
-        if (existingConversation) {
-          if (existingConversation.status === "active") {
-            await interaction.editReply({
-              content:
-                "A conversation is already active. Use `/sbb continue` to resume if paused.",
-            });
-            return;
-          } else if (existingConversation.status === "planning") {
-            await interaction.editReply({
-              content:
-                "A conversation is already in planning phase. Use `/sbb start` to approve and start, or `/sbb edit` to modify the plan.",
-            });
-            return;
-          }
+      const existingConversation = this.getConversationForChannel(
+        channelId,
+        thread
+      );
+      if (existingConversation) {
+        if (existingConversation.status === "active") {
+          await interaction.editReply({
+            content:
+              "A conversation is already active. Use `/sbb continue` to resume if paused.",
+          });
+          return;
+        } else if (existingConversation.status === "planning") {
+          await interaction.editReply({
+            content:
+              "A conversation is already in planning phase. Use `/sbb start` to approve and start, or `/sbb edit` to modify the plan.",
+          });
+          return;
         }
       }
 
@@ -691,18 +742,10 @@ export class DiscordBot {
       const thread = isInThread
         ? (interaction.channel as ThreadChannel)
         : undefined;
-      const lookupId = thread ? thread.id : interaction.channel!.id;
-
-      const conversationId = this.activeConversations.get(lookupId);
-      if (!conversationId) {
-        await interaction.editReply({
-          content:
-            "No active conversation found. Use `/sbb start` to start a new conversation.",
-        });
-        return;
-      }
-
-      const conversation = this.contextManager.getConversation(conversationId);
+      const conversation = this.getConversationForChannel(
+        interaction.channel!.id,
+        thread
+      );
       if (!conversation) {
         await interaction.editReply({
           content: "Conversation not found.",
@@ -722,7 +765,7 @@ export class DiscordBot {
       // Create a new message with the edited content
       const editedMessage: AppMessage = {
         id: `edit-${Date.now()}`,
-        conversationId,
+        conversationId: conversation.id,
         authorId: interaction.user.id,
         authorType: "user",
         content: newMessage,
@@ -731,11 +774,11 @@ export class DiscordBot {
       };
 
       // Add the edited message to conversation
-      this.contextManager.addMessage(conversationId, editedMessage);
+      this.contextManager.addMessage(conversation.id, editedMessage);
 
       // Re-trigger planning with the edited message
       const planningResponse = await this.sessionPlanner.handlePlanningResponse(
-        conversationId,
+        conversation.id,
         editedMessage
       );
 
@@ -792,6 +835,25 @@ export class DiscordBot {
     }
 
     return messages;
+  }
+
+  /**
+   * Get conversation for a channel or thread
+   * Helper method to reduce duplication
+   *
+   * @param channelId - Discord channel ID
+   * @param thread - Optional thread channel
+   * @returns Conversation state or null if not found
+   */
+  private getConversationForChannel(
+    channelId: string,
+    thread?: ThreadChannel
+  ): ConversationState | null {
+    const lookupId = thread ? thread.id : channelId;
+    const conversationId = this.activeConversations.get(lookupId);
+    return conversationId
+      ? this.contextManager.getConversation(conversationId) || null
+      : null;
   }
 
   /**
@@ -1075,14 +1137,6 @@ export class DiscordBot {
                   .setRequired(false)
               )
           )
-          // Go command (approve and start)
-          .addSubcommand((subcommand) =>
-            subcommand
-              .setName("go")
-              .setDescription(
-                "Approve plan and start conversation (compiles previous discussion if in thread)"
-              )
-          )
           // Edit command (edit planning)
           .addSubcommand((subcommand) =>
             subcommand
@@ -1284,21 +1338,12 @@ export class DiscordBot {
     const scribeModel = interaction.options.getString("scribe-model");
     const tldrModel = interaction.options.getString("tldr-model");
 
-    const conversationId = this.activeConversations.get(
+    const conversation = this.getConversationForChannel(
       interaction.channel!.id
     );
-    if (!conversationId) {
-      await interaction.reply({
-        content: "No active conversation found. Start a conversation first.",
-        flags: MessageFlags.Ephemeral,
-      });
-      return;
-    }
-
-    const conversation = this.contextManager.getConversation(conversationId);
     if (!conversation) {
       await interaction.reply({
-        content: "Conversation not found.",
+        content: "No active conversation found. Start a conversation first.",
         flags: MessageFlags.Ephemeral,
       });
       return;
@@ -1401,21 +1446,12 @@ export class DiscordBot {
       return;
     }
 
-    const conversationId = this.activeConversations.get(
+    const conversation = this.getConversationForChannel(
       interaction.channel!.id
     );
-    if (!conversationId) {
-      await interaction.reply({
-        content: "No active conversation found. Start a conversation first.",
-        flags: MessageFlags.Ephemeral,
-      });
-      return;
-    }
-
-    const conversation = this.contextManager.getConversation(conversationId);
     if (!conversation) {
       await interaction.reply({
-        content: "Conversation not found.",
+        content: "No active conversation found. Start a conversation first.",
         flags: MessageFlags.Ephemeral,
       });
       return;
@@ -1447,21 +1483,12 @@ export class DiscordBot {
   ): Promise<void> {
     const modelId = interaction.options.getString("model-id", true);
 
-    const conversationId = this.activeConversations.get(
+    const conversation = this.getConversationForChannel(
       interaction.channel!.id
     );
-    if (!conversationId) {
-      await interaction.reply({
-        content: "No active conversation found. Start a conversation first.",
-        flags: MessageFlags.Ephemeral,
-      });
-      return;
-    }
-
-    const conversation = this.contextManager.getConversation(conversationId);
     if (!conversation) {
       await interaction.reply({
-        content: "Conversation not found.",
+        content: "No active conversation found. Start a conversation first.",
         flags: MessageFlags.Ephemeral,
       });
       return;
@@ -1494,21 +1521,12 @@ export class DiscordBot {
   private async handleListModelsCommand(
     interaction: ChatInputCommandInteraction
   ): Promise<void> {
-    const conversationId = this.activeConversations.get(
+    const conversation = this.getConversationForChannel(
       interaction.channel!.id
     );
-    if (!conversationId) {
-      await interaction.reply({
-        content: "No active conversation found. Start a conversation first.",
-        flags: MessageFlags.Ephemeral,
-      });
-      return;
-    }
-
-    const conversation = this.contextManager.getConversation(conversationId);
     if (!conversation) {
       await interaction.reply({
-        content: "Conversation not found.",
+        content: "No active conversation found. Start a conversation first.",
         flags: MessageFlags.Ephemeral,
       });
       return;
@@ -1607,19 +1625,10 @@ export class DiscordBot {
       return;
     }
 
-    const conversationId = this.activeConversations.get(channelId);
-    if (!conversationId) {
-      await interaction.reply({
-        content: "No active conversation found. Start a conversation first.",
-        flags: MessageFlags.Ephemeral,
-      });
-      return;
-    }
-
-    const conversation = this.contextManager.getConversation(conversationId);
+    const conversation = this.getConversationForChannel(channelId);
     if (!conversation) {
       await interaction.reply({
-        content: "Conversation not found.",
+        content: "No active conversation found. Start a conversation first.",
         flags: MessageFlags.Ephemeral,
       });
       return;
@@ -1634,25 +1643,27 @@ export class DiscordBot {
     }
 
     // Check cost limit
-    const currentCost = conversation.costTracking?.totalCost || 0;
-    const costLimit =
-      conversation.costLimit || this.config.costLimits.conversation;
-    if (currentCost >= costLimit) {
+    const costCheck = checkCostLimit(
+      conversation,
+      "conversation",
+      this.config.costLimits.conversation
+    );
+    if (costCheck.exceeded) {
       await interaction.reply({
-        content: `⚠️ Cost limit reached ($${currentCost.toFixed(
-          2
-        )} / $${costLimit}). Please increase the limit or start a new conversation.`,
+        content: `⚠️ Cost limit reached ($${costCheck.current.toFixed(2)} / $${
+          costCheck.limit
+        }). Please increase the limit or start a new conversation.`,
         ephemeral: false,
       });
       return;
     }
 
-    this.contextManager.updateStatus(conversationId, "active");
+    this.contextManager.updateStatus(conversation.id, "active");
 
     await interaction.reply({
-      content: `✅ Conversation resumed!\n\n**Current Cost:** $${currentCost.toFixed(
+      content: `✅ Conversation resumed!\n\n**Current Cost:** $${costCheck.current.toFixed(
         2
-      )} / $${costLimit}\n**Status:** Active\n**Models:** ${
+      )} / $${costCheck.limit}\n**Status:** Active\n**Models:** ${
         conversation.selectedModels.length
       } active`,
       ephemeral: false,
@@ -1819,30 +1830,32 @@ export class DiscordBot {
         const conversation =
           this.contextManager.getConversation(conversationId);
         if (conversation) {
+          const imageCostCheck = checkCostLimit(
+            conversation,
+            "image",
+            this.config.costLimits.image
+          );
+
           if (conversation.imageGenerationBlocked) {
-            const imageCostLimit =
-              conversation.imageCostLimit || this.config.costLimits.image;
-            const currentImageCost =
-              conversation.imageCostTracking?.totalCost || 0;
             await interaction.editReply({
-              content: `🚫 Image generation is blocked due to cost limit.\n\n**Current Cost:** $${currentImageCost.toFixed(
+              content: `🚫 Image generation is blocked due to cost limit.\n\n**Current Cost:** $${imageCostCheck.current.toFixed(
                 2
-              )} / $${imageCostLimit}\n\nUse \`/sbb unblock-image\` to unblock image generation.`,
+              )} / $${
+                imageCostCheck.limit
+              }\n\nUse \`/sbb unblock-image\` to unblock image generation.`,
             });
             return;
           }
 
           // Check if we're about to exceed the limit
-          const imageCostLimit =
-            conversation.imageCostLimit || this.config.costLimits.image;
-          const currentImageCost =
-            conversation.imageCostTracking?.totalCost || 0;
-          if (currentImageCost >= imageCostLimit) {
+          if (imageCostCheck.exceeded) {
             conversation.imageGenerationBlocked = true;
             await interaction.editReply({
-              content: `🚫 Image generation is blocked due to cost limit.\n\n**Current Cost:** $${currentImageCost.toFixed(
+              content: `🚫 Image generation is blocked due to cost limit.\n\n**Current Cost:** $${imageCostCheck.current.toFixed(
                 2
-              )} / $${imageCostLimit}\n\nUse \`/sbb unblock-image\` to unblock image generation.`,
+              )} / $${
+                imageCostCheck.limit
+              }\n\nUse \`/sbb unblock-image\` to unblock image generation.`,
             });
             return;
           }
@@ -2113,14 +2126,16 @@ export class DiscordBot {
 
       // Unblock image generation
       conversation.imageGenerationBlocked = false;
-      const imageCostLimit =
-        conversation.imageCostLimit || this.config.costLimits.image;
-      const currentImageCost = conversation.imageCostTracking?.totalCost || 0;
+      const imageCostCheck = checkCostLimit(
+        conversation,
+        "image",
+        this.config.costLimits.image
+      );
 
       await interaction.editReply({
-        content: `✅ Image generation has been unblocked.\n\n**Current Cost:** $${currentImageCost.toFixed(
+        content: `✅ Image generation has been unblocked.\n\n**Current Cost:** $${imageCostCheck.current.toFixed(
           2
-        )} / $${imageCostLimit}\n\nYou can now generate images again.`,
+        )} / $${imageCostCheck.limit}\n\nYou can now generate images again.`,
       });
     } catch (error) {
       logger.error("Error unblocking image generation:", error);

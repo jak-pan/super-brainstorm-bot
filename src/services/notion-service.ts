@@ -7,6 +7,7 @@ import type {
 } from "@notionhq/client/build/src/api-endpoints.js";
 import type { ConversationState } from "../types/index.js";
 import { logger } from "../utils/logger.js";
+import { retryWithBackoff } from "../utils/retry.js";
 
 // Type guards for Notion blocks
 type NotionBlock = BlockObjectResponse | PartialBlockObjectResponse;
@@ -78,13 +79,21 @@ export class NotionService {
           database_id: this.databaseId,
         });
         // Check if it has a title property (Topic or Name)
-        if ("properties" in database && database.properties && typeof database.properties === "object") {
+        if (
+          "properties" in database &&
+          database.properties &&
+          typeof database.properties === "object"
+        ) {
           const hasTopic = "Topic" in database.properties;
           const hasName = "Name" in database.properties;
           const hasTitleProperty = Object.values(database.properties).some(
-            (prop) => prop && typeof prop === "object" && "type" in prop && prop.type === "title"
+            (prop) =>
+              prop &&
+              typeof prop === "object" &&
+              "type" in prop &&
+              prop.type === "title"
           );
-          
+
           if (hasTopic || (hasName && hasTitleProperty)) {
             return this.databaseId;
           }
@@ -155,6 +164,8 @@ export class NotionService {
     try {
       logger.info(`Creating new database in page ${this.pageId}...`);
       // Use type assertion to work around TypeScript type limitations
+      // The Notion SDK types don't fully support all API features we need
+      // This is a known limitation - the SDK types are incomplete
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
       const database = await (this.client.databases.create as any)({
         parent: {
@@ -204,6 +215,7 @@ export class NotionService {
           if (nameProperty) {
             const [propName] = nameProperty;
             // Update the database to rename the property
+            // Use type assertion due to Notion SDK type limitations (incomplete types)
             // eslint-disable-next-line @typescript-eslint/no-explicit-any
             await (this.client.databases.update as any)({
               database_id: dbId,
@@ -265,10 +277,21 @@ export class NotionService {
         conversation
       )}\n\n---\n\n*Last updated: ${timestamp}*`;
 
-      await this.updateSubpage(
-        entryId,
-        "Reasoning & Transcript",
-        subpageContent
+      await retryWithBackoff(
+        () =>
+          this.updateSubpage(entryId, "Reasoning & Transcript", subpageContent),
+        {
+          maxRetries: 3,
+          initialDelay: 1000,
+          retryableErrors: [
+            "rate_limit",
+            "timeout",
+            "network",
+            "ECONNRESET",
+            "ETIMEDOUT",
+            "429",
+          ],
+        }
       );
 
       logger.info(`Updated Notion reasoning document for topic: ${topicName}`);
@@ -311,7 +334,21 @@ export class NotionService {
           }\n\n---\n\n## TLDR - ${timestamp}\n\n### Summary\n\n${summary}\n\n### Key Findings\n\n${findingsText}`;
 
       // Update TLDR in the database entry
-      await this.updateTLDRContent(entryId, newTLDRContent);
+      await retryWithBackoff(
+        () => this.updateTLDRContent(entryId, newTLDRContent),
+        {
+          maxRetries: 3,
+          initialDelay: 1000,
+          retryableErrors: [
+            "rate_limit",
+            "timeout",
+            "network",
+            "ECONNRESET",
+            "ETIMEDOUT",
+            "429",
+          ],
+        }
+      );
 
       logger.info(`Updated Notion TLDR for topic: ${topicName}`);
     } catch (error) {
@@ -671,64 +708,109 @@ export class NotionService {
 
       if (subpageId) {
         // Update existing subpage
-        await this.client.blocks.children.append({
-          block_id: subpageId,
-          children: [
-            {
-              object: "block",
-              type: "paragraph",
-              paragraph: {
-                rich_text: [
-                  {
-                    type: "text",
-                    text: {
-                      content: content,
-                    },
-                  },
-                ],
-              },
-            },
-          ],
-        });
-      } else {
-        // Create new subpage
-        const subpage = await this.client.pages.create({
-          parent: {
-            page_id: parentId,
-          },
-          properties: {
-            title: {
-              title: [
+        await retryWithBackoff(
+          () =>
+            this.client.blocks.children.append({
+              block_id: subpageId,
+              children: [
                 {
-                  text: {
-                    content: subpageTitle,
+                  object: "block",
+                  type: "paragraph",
+                  paragraph: {
+                    rich_text: [
+                      {
+                        type: "text",
+                        text: {
+                          content: content,
+                        },
+                      },
+                    ],
                   },
                 },
               ],
-            },
-          },
-        });
+            }),
+          {
+            maxRetries: 3,
+            initialDelay: 1000,
+            retryableErrors: [
+              "rate_limit",
+              "timeout",
+              "network",
+              "ECONNRESET",
+              "ETIMEDOUT",
+              "429",
+            ],
+          }
+        );
+      } else {
+        // Create new subpage
+        const subpage = await retryWithBackoff(
+          () =>
+            this.client.pages.create({
+              parent: {
+                page_id: parentId,
+              },
+              properties: {
+                title: {
+                  title: [
+                    {
+                      text: {
+                        content: subpageTitle,
+                      },
+                    },
+                  ],
+                },
+              },
+            }),
+          {
+            maxRetries: 3,
+            initialDelay: 1000,
+            retryableErrors: [
+              "rate_limit",
+              "timeout",
+              "network",
+              "ECONNRESET",
+              "ETIMEDOUT",
+              "429",
+            ],
+          }
+        );
 
         // Add content to subpage
-        await this.client.blocks.children.append({
-          block_id: subpage.id,
-          children: [
-            {
-              object: "block",
-              type: "paragraph",
-              paragraph: {
-                rich_text: [
-                  {
-                    type: "text",
-                    text: {
-                      content: content,
-                    },
+        await retryWithBackoff(
+          () =>
+            this.client.blocks.children.append({
+              block_id: subpage.id,
+              children: [
+                {
+                  object: "block",
+                  type: "paragraph",
+                  paragraph: {
+                    rich_text: [
+                      {
+                        type: "text",
+                        text: {
+                          content: content,
+                        },
+                      },
+                    ],
                   },
-                ],
-              },
-            },
-          ],
-        });
+                },
+              ],
+            }),
+          {
+            maxRetries: 3,
+            initialDelay: 1000,
+            retryableErrors: [
+              "rate_limit",
+              "timeout",
+              "network",
+              "ECONNRESET",
+              "ETIMEDOUT",
+              "429",
+            ],
+          }
+        );
       }
     } catch (error) {
       logger.error("Failed to update subpage:", error);
@@ -738,6 +820,8 @@ export class NotionService {
 
   /**
    * Get subpage ID by title
+   * Note: child_page blocks don't have a direct title property,
+   * so we need to fetch each page to check its title
    */
   private async getSubpageId(
     parentId: string,
@@ -749,14 +833,52 @@ export class NotionService {
         page_size: 100,
       });
 
-      const subpage = response.results.find(
+      // Find all child_page blocks
+      const childPages = response.results.filter(
         (block): block is BlockObjectResponse & { type: "child_page" } => {
-          if (!isChildPageBlock(block)) return false;
-          return block.child_page.title === subpageTitle;
+          return isChildPageBlock(block);
         }
       );
 
-      return subpage ? subpage.id : null;
+      // Check each page's title by fetching the page
+      for (const childPage of childPages) {
+        try {
+          const page = await this.client.pages.retrieve({
+            page_id: childPage.id,
+          });
+
+          // Get title from page properties
+          if (isPageObjectResponse(page) && page.properties) {
+            const titleProperty = Object.values(page.properties).find(
+              (prop) =>
+                prop &&
+                typeof prop === "object" &&
+                "type" in prop &&
+                prop.type === "title"
+            );
+
+            if (
+              titleProperty &&
+              "title" in titleProperty &&
+              Array.isArray(titleProperty.title)
+            ) {
+              const titleText = titleProperty.title[0]?.plain_text || "";
+              if (titleText === subpageTitle) {
+                return childPage.id;
+              }
+            }
+          }
+        } catch (error) {
+          // Skip pages that can't be retrieved
+          logger.warn(
+            `Failed to retrieve page ${childPage.id} for title check:`,
+            error
+          );
+          continue;
+        }
+      }
+
+      return null;
     } catch (error) {
       logger.error("Failed to get subpage ID:", error);
       return null;
