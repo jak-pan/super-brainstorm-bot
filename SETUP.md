@@ -100,19 +100,19 @@ LOG_LEVEL=info
    * ✅ Insert content
 6. Click "Submit" and copy the **Internal Integration Token** (this is your `NOTION_API_KEY`)
 
-### Create Notion Database/Page
+### Create Notion Page
 
-1. Create a database or page in your Notion workspace (this will host all conversation topics)
-   * You can use a regular page or a database
-   * The bot will automatically create entries for each conversation topic
+1. Create an empty page in your Notion workspace (this will host the conversation database)
+   * The bot will automatically create a database with the proper schema in this page
+   * No manual database setup required!
 
-2. Share the database/page with your integration:
-   * Open the database/page
+2. Share the page with your integration:
+   * Open the page
    * Click "..." (three dots) > "Add connections"
    * Select your integration
 
-3. Get the Page/Database ID:
-   * Open the database/page in your browser
+3. Get the Page ID:
+   * Open the page in your browser
    * The URL will look like: `https://www.notion.so/Your-Page-Name-abc123def456...`
    * The Page ID is the part after the last `-` (e.g., `abc123def456...`)
    * Copy the full ID (it's a long string of characters)

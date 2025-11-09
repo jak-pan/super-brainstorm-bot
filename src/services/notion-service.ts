@@ -1,9 +1,9 @@
 import { Client } from "@notionhq/client";
-import type { 
-  BlockObjectResponse, 
+import type {
+  BlockObjectResponse,
   PartialBlockObjectResponse,
   PageObjectResponse,
-  PartialPageObjectResponse
+  PartialPageObjectResponse,
 } from "@notionhq/client/build/src/api-endpoints.js";
 import type { ConversationState } from "../types/index.js";
 import { logger } from "../utils/logger.js";
@@ -12,20 +12,34 @@ import { logger } from "../utils/logger.js";
 type NotionBlock = BlockObjectResponse | PartialBlockObjectResponse;
 type NotionPage = PageObjectResponse | PartialPageObjectResponse;
 
-function isBlockObjectResponse(block: NotionBlock): block is BlockObjectResponse {
+function isBlockObjectResponse(
+  block: NotionBlock
+): block is BlockObjectResponse {
   return "type" in block;
 }
 
-function isParagraphBlock(block: NotionBlock): block is BlockObjectResponse & { type: "paragraph" } {
+function isParagraphBlock(
+  block: NotionBlock
+): block is BlockObjectResponse & { type: "paragraph" } {
   return isBlockObjectResponse(block) && block.type === "paragraph";
 }
 
-function isHeading3Block(block: NotionBlock): block is BlockObjectResponse & { type: "heading_3" } {
+function isHeading3Block(
+  block: NotionBlock
+): block is BlockObjectResponse & { type: "heading_3" } {
   return isBlockObjectResponse(block) && block.type === "heading_3";
 }
 
-function isChildPageBlock(block: NotionBlock): block is BlockObjectResponse & { type: "child_page" } {
+function isChildPageBlock(
+  block: NotionBlock
+): block is BlockObjectResponse & { type: "child_page" } {
   return isBlockObjectResponse(block) && block.type === "child_page";
+}
+
+function isChildDatabaseBlock(
+  block: NotionBlock
+): block is BlockObjectResponse & { type: "child_database" } {
+  return isBlockObjectResponse(block) && block.type === "child_database";
 }
 
 function isPageObjectResponse(page: NotionPage): page is PageObjectResponse {
@@ -34,7 +48,7 @@ function isPageObjectResponse(page: NotionPage): page is PageObjectResponse {
 
 /**
  * NotionService - Manages Notion integration with unified database structure
- * 
+ *
  * Structure:
  * - Single database/page (NOTION_PAGE_ID)
  * - Each entry represents a topic/thread
@@ -43,39 +57,108 @@ function isPageObjectResponse(page: NotionPage): page is PageObjectResponse {
  */
 export class NotionService {
   private client: Client;
-  private databaseId: string; // Single database/page ID
-  private topicPropertyName: string; // Name of the property used for topic/title
+  private pageId: string; // Page ID where database will be created
+  private databaseId: string | null = null; // Database ID (cached after creation/retrieval)
 
-  constructor(apiKey: string, databaseId: string, topicPropertyName?: string) {
+  constructor(apiKey: string, pageId: string) {
     this.client = new Client({ auth: apiKey });
-    this.databaseId = databaseId;
-    this.topicPropertyName = topicPropertyName || "Topic";
+    this.pageId = pageId;
   }
 
   /**
-   * Get the title property name from the database schema
+   * Ensure database exists, create it if it doesn't
+   * Returns the database ID
    */
-  private async getTitlePropertyName(): Promise<string> {
+  private async ensureDatabase(): Promise<string> {
+    // If we already have a database ID, return it
+    if (this.databaseId) {
+      try {
+        // Verify it still exists
+        await this.client.databases.retrieve({
+          database_id: this.databaseId,
+        });
+        return this.databaseId;
+      } catch (error) {
+        // Database was deleted, reset and create new one
+        this.databaseId = null;
+      }
+    }
+
+    // Try to find existing database in the page
     try {
-      const database = await this.client.databases.retrieve({
-        database_id: this.databaseId,
+      // Check if page has child databases
+      const children = await this.client.blocks.children.list({
+        block_id: this.pageId,
+        page_size: 100,
       });
 
-      // Check if database has properties (might be partial response)
-      if ("properties" in database && database.properties) {
-        // Find the first title property
-        for (const [key, value] of Object.entries(database.properties)) {
-          if (value && typeof value === "object" && "type" in value && value.type === "title") {
-            return key;
+      // Look for existing database
+      for (const block of children.results) {
+        if (isChildDatabaseBlock(block)) {
+          // Found a database, try to retrieve it
+          try {
+            const database = await this.client.databases.retrieve({
+              database_id: block.id,
+            });
+            // Check if it has the Topic property
+            if (
+              "properties" in database &&
+              database.properties &&
+              typeof database.properties === "object" &&
+              "Topic" in database.properties
+            ) {
+              this.databaseId = block.id;
+              logger.info(`Found existing database: ${this.databaseId}`);
+              return this.databaseId;
+            }
+          } catch (error) {
+            // Database doesn't exist or can't be accessed, continue
           }
         }
       }
-
-      // Fallback to configured name or "Topic"
-      return this.topicPropertyName;
     } catch (error) {
-      logger.warn("Failed to retrieve database schema, using default property name:", error);
-      return this.topicPropertyName;
+      logger.warn("Failed to check for existing database:", error);
+    }
+
+    // Create new database with proper schema
+    try {
+      logger.info(`Creating new database in page ${this.pageId}...`);
+      // Use type assertion to work around TypeScript type limitations
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const database = await (this.client.databases.create as any)({
+        parent: {
+          type: "page_id",
+          page_id: this.pageId,
+        },
+        title: [
+          {
+            type: "text",
+            text: {
+              content: "Super Brainstorm Bot Conversations",
+            },
+          },
+        ],
+        properties: {
+          Topic: {
+            title: {},
+          },
+        },
+      });
+
+      if (!database.id) {
+        throw new Error("Database creation succeeded but no ID returned");
+      }
+      const dbId = database.id;
+      this.databaseId = dbId;
+      logger.info(`Created new database: ${dbId}`);
+      return dbId;
+    } catch (error) {
+      logger.error("Failed to create database:", error);
+      throw new Error(
+        `Failed to create Notion database: ${
+          error instanceof Error ? error.message : "Unknown error"
+        }`
+      );
     }
   }
 
@@ -90,14 +173,27 @@ export class NotionService {
     try {
       const timestamp = new Date().toISOString();
       const topicName = conversation.topic || conversation.id;
-      
+
       // Find or create database entry for this topic
-      const entryId = await this.findOrCreateDatabaseEntry(topicName, conversation);
-      
+      const entryId = await this.findOrCreateDatabaseEntry(
+        topicName,
+        conversation
+      );
+
       // Create or update the reasoning/transcript subpage
-      const subpageContent = `## Reasoning and Transcript\n\n**Status**: ${conversation.status}\n**Messages**: ${conversation.messageCount}\n**Last Updated**: ${timestamp}\n\n### Compressed Reasoning\n\n${compressedContent}\n\n### Full Transcript\n\n${this.formatTranscript(conversation)}\n\n---\n\n*Last updated: ${timestamp}*`;
-      
-      await this.updateSubpage(entryId, "Reasoning & Transcript", subpageContent);
+      const subpageContent = `## Reasoning and Transcript\n\n**Status**: ${
+        conversation.status
+      }\n**Messages**: ${
+        conversation.messageCount
+      }\n**Last Updated**: ${timestamp}\n\n### Compressed Reasoning\n\n${compressedContent}\n\n### Full Transcript\n\n${this.formatTranscript(
+        conversation
+      )}\n\n---\n\n*Last updated: ${timestamp}*`;
+
+      await this.updateSubpage(
+        entryId,
+        "Reasoning & Transcript",
+        subpageContent
+      );
 
       logger.info(`Updated Notion reasoning document for topic: ${topicName}`);
     } catch (error) {
@@ -118,21 +214,26 @@ export class NotionService {
     try {
       const timestamp = new Date().toISOString();
       const topicName = conversation.topic || conversation.id;
-      
+
       // Find or create database entry
-      const entryId = await this.findOrCreateDatabaseEntry(topicName, conversation);
-      
+      const entryId = await this.findOrCreateDatabaseEntry(
+        topicName,
+        conversation
+      );
+
       // Get existing TLDR content
       const existingTLDR = await this.getExistingTLDR(entryId);
-      
+
       // Append new TLDR
       const findingsText = keyFindings
         .map((f, i) => `${i + 1}. ${f}`)
         .join("\n");
-      const newTLDRContent = existingTLDR 
+      const newTLDRContent = existingTLDR
         ? `${existingTLDR}\n\n---\n\n## TLDR - ${timestamp}\n\n### Summary\n\n${summary}\n\n### Key Findings\n\n${findingsText}`
-        : `## Initial Prompt\n\n${conversation.messages[0]?.content || "No initial prompt"}\n\n---\n\n## TLDR - ${timestamp}\n\n### Summary\n\n${summary}\n\n### Key Findings\n\n${findingsText}`;
-      
+        : `## Initial Prompt\n\n${
+            conversation.messages[0]?.content || "No initial prompt"
+          }\n\n---\n\n## TLDR - ${timestamp}\n\n### Summary\n\n${summary}\n\n### Key Findings\n\n${findingsText}`;
+
       // Update TLDR in the database entry
       await this.updateTLDRContent(entryId, newTLDRContent);
 
@@ -152,7 +253,10 @@ export class NotionService {
       }
 
       // Get reasoning content from subpage
-      const subpageId = await this.getSubpageId(conversation.id, "Reasoning & Transcript");
+      const subpageId = await this.getSubpageId(
+        conversation.id,
+        "Reasoning & Transcript"
+      );
       if (!subpageId) {
         return "";
       }
@@ -178,12 +282,12 @@ export class NotionService {
         } else if (isHeading3Block(block)) {
           text = block.heading_3.rich_text[0]?.plain_text || "";
         }
-        
+
         if (text.includes("Compressed Reasoning")) {
           inReasoningSection = true;
           continue;
         }
-        
+
         if (inReasoningSection) {
           if (text.includes("Full Transcript") || text.includes("---")) {
             break;
@@ -208,10 +312,16 @@ export class NotionService {
   ): Promise<string> {
     try {
       const topicName = conversation.topic || conversation.id;
-      const entryId = await this.findOrCreateDatabaseEntry(topicName, conversation);
-      
+      const entryId = await this.findOrCreateDatabaseEntry(
+        topicName,
+        conversation
+      );
+
       // Get reasoning content from subpage
-      const subpageId = await this.getSubpageId(entryId, "Reasoning & Transcript");
+      const subpageId = await this.getSubpageId(
+        entryId,
+        "Reasoning & Transcript"
+      );
       if (!subpageId) {
         return "";
       }
@@ -222,15 +332,17 @@ export class NotionService {
       });
 
       // Extract all content from the subpage
-      const content = response.results.map((block): string => {
-        if (isParagraphBlock(block)) {
-          return block.paragraph.rich_text[0]?.plain_text || "";
-        }
-        if (isHeading3Block(block)) {
-          return `### ${block.heading_3.rich_text[0]?.plain_text || ""}`;
-        }
-        return "";
-      }).join("\n");
+      const content = response.results
+        .map((block): string => {
+          if (isParagraphBlock(block)) {
+            return block.paragraph.rich_text[0]?.plain_text || "";
+          }
+          if (isHeading3Block(block)) {
+            return `### ${block.heading_3.rich_text[0]?.plain_text || ""}`;
+          }
+          return "";
+        })
+        .join("\n");
 
       // Extract the "Compressed Reasoning" section if it exists
       const reasoningMatch = content.match(
@@ -260,8 +372,8 @@ export class NotionService {
     _conversation: ConversationState
   ): Promise<string> {
     try {
-      // Get the actual title property name from the database schema
-      const titlePropertyName = await this.getTitlePropertyName();
+      // Ensure database exists
+      const databaseId = await this.ensureDatabase();
 
       // Search for existing entry with this topic name using search API
       const searchResponse = await this.client.search({
@@ -279,21 +391,23 @@ export class NotionService {
       // Filter results to find pages in our database with matching topic
       for (const result of searchResponse.results) {
         // Type guard: only process page objects
-        if ("object" in result && result.object === "page" && isPageObjectResponse(result)) {
+        if (
+          "object" in result &&
+          result.object === "page" &&
+          isPageObjectResponse(result)
+        ) {
           // Check if this page belongs to our database
-          if (result.parent.type === "database_id" && result.parent.database_id === this.databaseId) {
-            // Check if the topic property matches (try configured name first, then any title property)
-            let topicProperty = result.properties[titlePropertyName];
-            if (!topicProperty || topicProperty.type !== "title") {
-              // Fallback: find any title property
-              for (const prop of Object.values(result.properties)) {
-                if (prop && typeof prop === "object" && "type" in prop && prop.type === "title") {
-                  topicProperty = prop;
-                  break;
-                }
-              }
-            }
-            if (topicProperty && topicProperty.type === "title" && "title" in topicProperty) {
+          if (
+            result.parent.type === "database_id" &&
+            result.parent.database_id === databaseId
+          ) {
+            // Check if the Topic property matches
+            const topicProperty = result.properties["Topic"];
+            if (
+              topicProperty &&
+              topicProperty.type === "title" &&
+              "title" in topicProperty
+            ) {
               const titleText = topicProperty.title[0]?.plain_text || "";
               if (titleText === topicName) {
                 return result.id;
@@ -303,13 +417,13 @@ export class NotionService {
         }
       }
 
-      // Create new entry using the detected title property name
+      // Create new entry
       const newPage = await this.client.pages.create({
         parent: {
-          database_id: this.databaseId,
+          database_id: databaseId,
         },
         properties: {
-          [titlePropertyName]: {
+          Topic: {
             title: [
               {
                 text: {
@@ -332,10 +446,15 @@ export class NotionService {
    * Get TLDR content for a conversation
    * Public method to retrieve compiled TLDR from Notion
    */
-  async getTLDRForConversation(conversation: ConversationState): Promise<string> {
+  async getTLDRForConversation(
+    conversation: ConversationState
+  ): Promise<string> {
     try {
       const topicName = conversation.topic || conversation.id;
-      const entryId = await this.findOrCreateDatabaseEntry(topicName, conversation);
+      const entryId = await this.findOrCreateDatabaseEntry(
+        topicName,
+        conversation
+      );
       return await this.getExistingTLDR(entryId);
     } catch (error) {
       logger.error("Failed to get TLDR for conversation:", error);
@@ -354,16 +473,18 @@ export class NotionService {
       });
 
       // Find TLDR content block
-      const tldrBlocks = response.results.filter((block): block is BlockObjectResponse & { type: "paragraph" } => {
-        if (!isParagraphBlock(block)) return false;
-        const text = block.paragraph.rich_text[0]?.plain_text || "";
-        return text.includes("TLDR") || text.includes("Summary");
-      });
+      const tldrBlocks = response.results.filter(
+        (block): block is BlockObjectResponse & { type: "paragraph" } => {
+          if (!isParagraphBlock(block)) return false;
+          const text = block.paragraph.rich_text[0]?.plain_text || "";
+          return text.includes("TLDR") || text.includes("Summary");
+        }
+      );
 
       if (tldrBlocks.length > 0) {
-        return tldrBlocks.map((block) => 
-          block.paragraph.rich_text[0]?.plain_text || ""
-        ).join("\n");
+        return tldrBlocks
+          .map((block) => block.paragraph.rich_text[0]?.plain_text || "")
+          .join("\n");
       }
 
       return "";
@@ -376,7 +497,10 @@ export class NotionService {
   /**
    * Update TLDR content in database entry
    */
-  private async updateTLDRContent(entryId: string, content: string): Promise<void> {
+  private async updateTLDRContent(
+    entryId: string,
+    content: string
+  ): Promise<void> {
     try {
       // Clear existing TLDR blocks
       const existingBlocks = await this.client.blocks.children.list({
@@ -385,11 +509,13 @@ export class NotionService {
       });
 
       const tldrBlockIds = existingBlocks.results
-        .filter((block): block is BlockObjectResponse & { type: "paragraph" } => {
-          if (!isParagraphBlock(block)) return false;
-          const text = block.paragraph.rich_text[0]?.plain_text || "";
-          return text.includes("TLDR") || text.includes("Initial Prompt");
-        })
+        .filter(
+          (block): block is BlockObjectResponse & { type: "paragraph" } => {
+            if (!isParagraphBlock(block)) return false;
+            const text = block.paragraph.rich_text[0]?.plain_text || "";
+            return text.includes("TLDR") || text.includes("Initial Prompt");
+          }
+        )
         .map((block) => block.id);
 
       // Delete old TLDR blocks
@@ -434,7 +560,7 @@ export class NotionService {
     try {
       // Check if subpage already exists
       const subpageId = await this.getSubpageId(parentId, subpageTitle);
-      
+
       if (subpageId) {
         // Update existing subpage
         await this.client.blocks.children.append({
@@ -505,17 +631,22 @@ export class NotionService {
   /**
    * Get subpage ID by title
    */
-  private async getSubpageId(parentId: string, subpageTitle: string): Promise<string | null> {
+  private async getSubpageId(
+    parentId: string,
+    subpageTitle: string
+  ): Promise<string | null> {
     try {
       const response = await this.client.blocks.children.list({
         block_id: parentId,
         page_size: 100,
       });
 
-      const subpage = response.results.find((block): block is BlockObjectResponse & { type: "child_page" } => {
-        if (!isChildPageBlock(block)) return false;
-        return block.child_page.title === subpageTitle;
-      });
+      const subpage = response.results.find(
+        (block): block is BlockObjectResponse & { type: "child_page" } => {
+          if (!isChildPageBlock(block)) return false;
+          return block.child_page.title === subpageTitle;
+        }
+      );
 
       return subpage ? subpage.id : null;
     } catch (error) {
@@ -527,7 +658,9 @@ export class NotionService {
   /**
    * Find conversation entry in database
    */
-  private async findConversationEntry(conversationId: string): Promise<{ id: string } | null> {
+  private async findConversationEntry(
+    conversationId: string
+  ): Promise<{ id: string } | null> {
     try {
       // Search for existing entry using search API
       const searchResponse = await this.client.search({
@@ -542,27 +675,29 @@ export class NotionService {
         },
       });
 
-      // Get the actual title property name from the database schema
-      const titlePropertyName = await this.getTitlePropertyName();
+      // Ensure database exists
+      const databaseId = await this.ensureDatabase();
 
       // Filter results to find pages in our database
       for (const result of searchResponse.results) {
         // Type guard: only process page objects
-        if ("object" in result && result.object === "page" && isPageObjectResponse(result)) {
+        if (
+          "object" in result &&
+          result.object === "page" &&
+          isPageObjectResponse(result)
+        ) {
           // Check if this page belongs to our database
-          if (result.parent.type === "database_id" && result.parent.database_id === this.databaseId) {
-            // Check if the topic property contains the conversation ID (try configured name first, then any title property)
-            let topicProperty = result.properties[titlePropertyName];
-            if (!topicProperty || topicProperty.type !== "title") {
-              // Fallback: find any title property
-              for (const prop of Object.values(result.properties)) {
-                if (prop && typeof prop === "object" && "type" in prop && prop.type === "title") {
-                  topicProperty = prop;
-                  break;
-                }
-              }
-            }
-            if (topicProperty && topicProperty.type === "title" && "title" in topicProperty) {
+          if (
+            result.parent.type === "database_id" &&
+            result.parent.database_id === databaseId
+          ) {
+            // Check if the Topic property contains the conversation ID
+            const topicProperty = result.properties["Topic"];
+            if (
+              topicProperty &&
+              topicProperty.type === "title" &&
+              "title" in topicProperty
+            ) {
               const titleText = topicProperty.title[0]?.plain_text || "";
               if (titleText.includes(conversationId)) {
                 return { id: result.id };
@@ -584,11 +719,12 @@ export class NotionService {
    */
   private formatTranscript(conversation: ConversationState): string {
     const lines: string[] = [];
-    
+
     conversation.messages.forEach((msg, index) => {
-      const author = msg.authorType === "user"
-        ? `User (${msg.authorId})`
-        : msg.model || msg.authorId;
+      const author =
+        msg.authorType === "user"
+          ? `User (${msg.authorId})`
+          : msg.model || msg.authorId;
       const timestamp = msg.timestamp.toISOString();
       lines.push(`[${index + 1}] ${author} (${timestamp}):`);
       lines.push(msg.content);
