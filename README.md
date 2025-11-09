@@ -17,6 +17,30 @@ A Discord bot that enables collaborative brainstorming sessions with multiple AI
 * 🔧 **Model Management**: Slash commands for dynamic model selection and management
 * 🧵 **Thread Support**: Start conversations in existing threads with automatic compilation of previous discussion
 
+### How It Works
+
+1. **User starts conversation** with `/sbb start` in a channel or thread
+2. **Planning starts immediately** - Planner analyzes the first message using promise-based approach
+3. **Thread messages** (if in thread): Previous messages are added to context but not compiled yet
+4. **Task type detection** - Bot automatically detects task type (general/coding/architecture) and selects appropriate models
+5. **Clarification flow**:
+   * **If questions are asked**: Conversation stays in planning mode, user responds via messages or `/sbb edit`
+   * **After user responds**: Plan is created automatically, conversation waits for `/sbb start` approval
+   * **If no questions**: Plan is created immediately
+6. **Auto-start or approval**:
+   * **With `/sbb start`**: If plan exists, auto-starts conversation (compiles thread messages if needed)
+   * **With `/sbb plan`**: Creates plan and waits for `/sbb start` approval
+7. **Thread compilation** (on approval, if in thread): Previous messages are compiled by Scribe (detailed) and TLDR (summary)
+8. **Conversation starts** - All bots become active and the conversation begins
+9. **AI models respond** - Multiple AIs generate responses based on the conversation context
+10. **AIs interact** - AIs can respond to each other, building on previous responses
+11. **Scribe bot documents** - The conversation is automatically documented in detail and stored in Notion (async, non-blocking)
+12. **TLDR bot summarizes** - Key findings and summaries are extracted from Scribe's detailed documentation (async, non-blocking)
+13. **Cost tracking** - All costs are tracked directly from OpenRouter API responses (in USD) and aggregated per conversation
+14. **Automatic limits** - Conversations pause automatically when conversation cost limit ($22 default) is reached; image generation is blocked when image cost limit ($2 default) is reached
+15. **Unblock image generation** - Use `/sbb unblock-image` to resume image generation after it's been blocked
+16. **Context refresh** - When message count threshold is reached, the bot automatically refreshes context from Notion
+
 ## Architecture
 
 See [ARCHITECTURE.md](./ARCHITECTURE.md) for detailed architecture documentation with Mermaid diagrams.
@@ -155,30 +179,6 @@ All commands use the `/sbb` prefix:
 #### Settings
 
 * `/sbb settings` - View and modify bot settings (default models, limits, intervals)
-
-### How It Works
-
-1. **User starts conversation** with `/sbb start` in a channel or thread
-2. **Planning starts immediately** - Planner analyzes the first message using promise-based approach
-3. **Thread messages** (if in thread): Previous messages are added to context but not compiled yet
-4. **Task type detection** - Bot automatically detects task type (general/coding/architecture) and selects appropriate models
-5. **Clarification flow**:
-   * **If questions are asked**: Conversation stays in planning mode, user responds via messages or `/sbb edit`
-   * **After user responds**: Plan is created automatically, conversation waits for `/sbb start` approval
-   * **If no questions**: Plan is created immediately
-6. **Auto-start or approval**:
-   * **With `/sbb start`**: If plan exists, auto-starts conversation (compiles thread messages if needed)
-   * **With `/sbb plan`**: Creates plan and waits for `/sbb start` approval
-7. **Thread compilation** (on approval, if in thread): Previous messages are compiled by Scribe (detailed) and TLDR (summary)
-8. **Conversation starts** - All bots become active and the conversation begins
-9. **AI models respond** - Multiple AIs generate responses based on the conversation context
-10. **AIs interact** - AIs can respond to each other, building on previous responses
-11. **Scribe bot documents** - The conversation is automatically documented in detail and stored in Notion (async, non-blocking)
-12. **TLDR bot summarizes** - Key findings and summaries are extracted from Scribe's detailed documentation (async, non-blocking)
-13. **Cost tracking** - All costs are tracked directly from OpenRouter API responses (in USD) and aggregated per conversation
-14. **Automatic limits** - Conversations pause automatically when conversation cost limit ($22 default) is reached; image generation is blocked when image cost limit ($2 default) is reached
-15. **Unblock image generation** - Use `/sbb unblock-image` to resume image generation after it's been blocked
-16. **Context refresh** - When message count threshold is reached, the bot automatically refreshes context from Notion
 
 ## Project Structure
 
