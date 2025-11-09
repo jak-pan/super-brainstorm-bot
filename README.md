@@ -102,22 +102,6 @@ npm run dev
 
 ## Usage
 
-### Starting a Conversation
-
-Use `/sbb start` to begin a new conversation. The command automatically detects if you're in a channel or thread:
-
-* **In a channel**: Starts planning immediately using promise-based approach
-* **In a thread**:
-  * Fetches all previous messages from the thread (adds them to context)
-  * Starts planning immediately with the first message
-  * Session Planner analyzes using promise-based approach (no timeout/polling)
-  * **If questions are asked**: Conversation stays in planning mode, respond via messages or `/sbb edit`
-  * **After questions answered or if no questions**: Plan is created automatically
-  * When you approve the plan (use `/sbb start`), previous messages are compiled using Scribe (detailed documentation) and TLDR (summary)
-  * Then the conversation starts with all bots active
-
-The bot will automatically detect the task type and select appropriate AI models.
-
 ### Commands
 
 All commands use the `/sbb` prefix:
@@ -125,11 +109,14 @@ All commands use the `/sbb` prefix:
 #### Conversation Management
 
 * `/sbb start [topic]` - Start conversation (auto-starts if no plan exists, approves if plan exists)
-  * **If no plan exists**: Creates plan using promise-based approach
-    * **If questions are asked**: Stays in planning mode, waits for your response, then creates plan
+  * **In a channel**: Topic is required, starts planning immediately using promise-based approach
+  * **In a thread**: Topic is optional (uses thread name), fetches all previous messages and adds them to context
+  * **If no plan exists**: Creates plan using promise-based approach (no timeout/polling)
+    * **If questions are asked**: Conversation stays in planning mode, respond via messages or `/sbb edit`, then plan is created automatically
     * **If no questions**: Creates plan immediately and auto-starts conversation
-  * **If plan exists**: Approves plan and starts conversation (compiles previous discussion if in thread)
-  * **Topic**: Required if not in thread, optional in threads (uses thread name)
+  * **If plan exists**: Approves plan and starts conversation
+    * **In a thread**: Compiles previous messages using Scribe (detailed documentation) and TLDR (summary) before starting
+  * The bot automatically detects task type (general/coding/architecture) and selects appropriate AI models
 * `/sbb plan [topic]` - Start planning mode (creates plan and waits for approval)
   * Creates a plan using promise-based approach (no timeout/polling)
   * If questions are asked, waits for your response before creating plan
