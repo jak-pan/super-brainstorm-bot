@@ -38,6 +38,7 @@ RUN npm ci --only=production --legacy-peer-deps && npm cache clean --force
 # Copy built files from builder
 COPY --from=builder /app/dist ./dist
 COPY --from=builder /app/src/prompts ./src/prompts
+COPY --from=builder /app/src/config/default-settings.json ./src/config/default-settings.json
 
 # Change ownership to nodejs user
 RUN chown -R nodejs:nodejs /app
