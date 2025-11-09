@@ -37,7 +37,8 @@ RUN npm ci --only=production --legacy-peer-deps && npm cache clean --force
 
 # Copy built files from builder
 COPY --from=builder /app/dist ./dist
-COPY --from=builder /app/src/prompts ./src/prompts
+# Copy prompts directory (needed at runtime, not compiled by TypeScript)
+COPY --from=builder /app/src/prompts ./dist/prompts
 # Copy default-settings.json (needed at runtime, not compiled by TypeScript)
 COPY --from=builder /app/src/config/default-settings.json ./dist/config/default-settings.json
 
