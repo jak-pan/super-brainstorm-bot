@@ -236,11 +236,18 @@ export class DiscordBot {
     await interaction.deferReply();
 
     try {
-      const isInThread = interaction.channel?.isThread();
+      if (!interaction.channel) {
+        await interaction.editReply({
+          content: "Error: No channel found for this interaction.",
+        });
+        return;
+      }
+
+      const isInThread = interaction.channel.isThread();
       let thread: ThreadChannel | undefined = isInThread
         ? (interaction.channel as ThreadChannel)
         : undefined;
-      const channelId = interaction.channel!.id;
+      const channelId = interaction.channel.id;
       const topicOption = interaction.options.getString("topic");
 
       // Topic is required if not in thread
@@ -264,8 +271,18 @@ export class DiscordBot {
         });
 
         try {
+          // Check if bot has permission to create threads
+          const botMember = await interaction.guild?.members.fetch(this.client.user!.id);
+          const permissions = interaction.channel.permissionsFor(botMember!);
+          if (!permissions?.has("CreatePublicThreads")) {
+            throw new Error(
+              "Bot does not have permission to create threads. Please grant 'Create Public Threads' permission."
+            );
+          }
+
           // Create thread with topic as name (truncate to 100 chars if needed)
-          const threadName = topic.length > 100 ? topic.substring(0, 97) + "..." : topic;
+          const threadName =
+            topic.length > 100 ? topic.substring(0, 97) + "..." : topic;
           const newThread = await interaction.channel.threads.create({
             name: threadName,
             autoArchiveDuration: 1440, // 24 hours
@@ -295,7 +312,13 @@ export class DiscordBot {
         }
       }
 
-      const lookupId = thread ? thread.id : channelId;
+      const lookupId = thread?.id || channelId;
+      if (!lookupId) {
+        await interaction.editReply({
+          content: "Error: Could not determine channel or thread ID.",
+        });
+        return;
+      }
       const existingConversationId = this.activeConversations.get(lookupId);
       let conversation = existingConversationId
         ? this.contextManager.getConversation(existingConversationId)
@@ -336,9 +359,19 @@ export class DiscordBot {
       // Create/get conversation and create plan, then auto-start
       let conversationId: string;
       if (!conversation) {
-        // Use thread ID if thread was created, otherwise use channel ID
-        const conversationChannelId = thread ? thread.id : channelId;
-        conversationId = this.getOrCreateConversation(conversationChannelId, topic, thread);
+        // Use thread ID if thread exists, otherwise use channel ID
+        const conversationChannelId = thread?.id || channelId;
+        if (!conversationChannelId) {
+          await interaction.editReply({
+            content: "Error: Could not determine channel or thread ID.",
+          });
+          return;
+        }
+        conversationId = this.getOrCreateConversation(
+          conversationChannelId,
+          topic,
+          thread
+        );
         conversation = this.contextManager.getConversation(conversationId);
 
         if (!conversation) {
@@ -418,9 +451,7 @@ export class DiscordBot {
 
       // If questions were asked, short-circuit to planning mode
       if (planningResult.type === "questions") {
-        const threadLink = thread 
-          ? ` in <#${thread.id}>` 
-          : "";
+        const threadLink = thread ? ` in <#${thread.id}>` : "";
         await interaction.editReply({
           content: `✅ Planning started${threadLink}. Session Planner has asked clarifying questions. Please respond, then use \`/sbb start\` to begin the conversation.`,
         });
@@ -445,9 +476,7 @@ export class DiscordBot {
 
         // Auto-start
         await this.sessionPlanner.approveAndStart(conversationId);
-        const threadLink = thread 
-          ? ` in <#${thread.id}>` 
-          : "";
+        const threadLink = thread ? ` in <#${thread.id}>` : "";
         await interaction.editReply({
           content: `✅ Conversation started${threadLink}! Plan created and conversation is now active.`,
         });
