@@ -70,16 +70,33 @@ export class NotionService {
    * Returns the database ID
    */
   private async ensureDatabase(): Promise<string> {
-    // If we already have a database ID, return it
+    // If we already have a database ID, verify it still exists and has Topic property
     if (this.databaseId) {
       try {
-        // Verify it still exists
-        await this.client.databases.retrieve({
+        // Verify it still exists and has the correct schema
+        const database = await this.client.databases.retrieve({
           database_id: this.databaseId,
         });
-        return this.databaseId;
+        // Check if it has the Topic property
+        if (
+          "properties" in database &&
+          database.properties &&
+          typeof database.properties === "object" &&
+          "Topic" in database.properties
+        ) {
+          return this.databaseId;
+        } else {
+          // Database exists but doesn't have Topic property, reset and find/create new one
+          logger.warn(
+            `Database ${this.databaseId} exists but doesn't have Topic property, creating new one`
+          );
+          this.databaseId = null;
+        }
       } catch (error) {
         // Database was deleted, reset and create new one
+        logger.warn(
+          `Database ${this.databaseId} no longer exists, creating new one`
+        );
         this.databaseId = null;
       }
     }

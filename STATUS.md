@@ -419,6 +419,7 @@ This document tracks the implementation progress of the Super Brainstorm Bot sys
   * **Bug Fix (2025-11-09)**: Fixed Notion API compatibility - replaced `databases.query` (not available in v5.3.0) with `client.search()` API. Added proper type guards to filter search results to only page objects.
   * **Bug Fix (2025-11-09)**: Fixed hardcoded 'Topic' property requirement - added automatic detection of title property name from database schema. Works with any Notion database regardless of property names.
   * **Refactor (2025-11-09)**: Changed to auto-create database with proper schema - service now accepts page ID and automatically creates a database with 'Topic' property if it doesn't exist. Removes need for manual database setup.
+  * **Bug Fix (2025-11-09)**: Fixed cached database validation - ensureDatabase now verifies that cached database has Topic property before using it. Prevents using databases without correct schema.
 
 ***
 
