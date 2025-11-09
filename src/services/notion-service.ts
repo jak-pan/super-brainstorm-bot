@@ -540,6 +540,104 @@ export class NotionService {
   }
 
   /**
+   * Split content into chunks that fit within Notion's 2000 character limit per paragraph
+   * Notion API limit: 2000 characters per text content in a paragraph block
+   *
+   * @param content - The content to split
+   * @param maxLength - Maximum length per chunk (default: 1990 for safety margin)
+   * @returns Array of content chunks
+   */
+  private splitContentIntoChunks(
+    content: string,
+    maxLength: number = 1990
+  ): string[] {
+    if (content.length <= maxLength) {
+      return [content];
+    }
+
+    const chunks: string[] = [];
+    let currentIndex = 0;
+
+    while (currentIndex < content.length) {
+      let chunk = content.slice(currentIndex, currentIndex + maxLength);
+
+      // Try to break at a newline if we're in the middle of the content
+      if (currentIndex + maxLength < content.length) {
+        const lastNewline = chunk.lastIndexOf("\n");
+        if (lastNewline > maxLength * 0.8) {
+          // If we found a newline in the last 20% of the chunk, use it
+          chunk = chunk.slice(0, lastNewline + 1);
+          currentIndex += lastNewline + 1;
+        } else {
+          currentIndex += maxLength;
+        }
+      } else {
+        currentIndex += maxLength;
+      }
+
+      chunks.push(chunk);
+    }
+
+    return chunks;
+  }
+
+  /**
+   * Append content to a Notion page, splitting into multiple blocks if needed
+   * to respect Notion's 2000 character limit per paragraph
+   *
+   * @param blockId - The Notion block/page ID to append to
+   * @param content - The content to append
+   */
+  private async appendContentToPage(
+    blockId: string,
+    content: string
+  ): Promise<void> {
+    const chunks = this.splitContentIntoChunks(content);
+
+    logger.info(
+      `Appending content to page ${blockId} (${content.length} chars, split into ${chunks.length} chunks)`
+    );
+
+    // Append chunks sequentially to respect rate limits
+    for (let i = 0; i < chunks.length; i++) {
+      await retryWithBackoff(
+        () =>
+          this.client.blocks.children.append({
+            block_id: blockId,
+            children: [
+              {
+                object: "block",
+                type: "paragraph",
+                paragraph: {
+                  rich_text: [
+                    {
+                      type: "text",
+                      text: {
+                        content: chunks[i],
+                      },
+                    },
+                  ],
+                },
+              },
+            ],
+          }),
+        {
+          maxRetries: 3,
+          initialDelay: 1000,
+          retryableErrors: [
+            "rate_limit",
+            "timeout",
+            "network",
+            "ECONNRESET",
+            "ETIMEDOUT",
+            "429",
+          ],
+        }
+      );
+    }
+  }
+
+  /**
    * Update TLDR content in database entry
    */
   private async updateTLDRContent(
@@ -568,26 +666,8 @@ export class NotionService {
         await this.client.blocks.delete({ block_id: blockId });
       }
 
-      // Add new TLDR content
-      await this.client.blocks.children.append({
-        block_id: entryId,
-        children: [
-          {
-            object: "block",
-            type: "paragraph",
-            paragraph: {
-              rich_text: [
-                {
-                  type: "text",
-                  text: {
-                    content: content,
-                  },
-                },
-              ],
-            },
-          },
-        ],
-      });
+      // Add new TLDR content (split into chunks if needed)
+      await this.appendContentToPage(entryId, content);
     } catch (error) {
       logger.error("Failed to update TLDR content:", error);
       throw error;
@@ -607,41 +687,8 @@ export class NotionService {
       const subpageId = await this.getSubpageId(parentId, subpageTitle);
 
       if (subpageId) {
-        // Update existing subpage
-        await retryWithBackoff(
-          () =>
-            this.client.blocks.children.append({
-              block_id: subpageId,
-              children: [
-                {
-                  object: "block",
-                  type: "paragraph",
-                  paragraph: {
-                    rich_text: [
-                      {
-                        type: "text",
-                        text: {
-                          content: content,
-                        },
-                      },
-                    ],
-                  },
-                },
-              ],
-            }),
-          {
-            maxRetries: 3,
-            initialDelay: 1000,
-            retryableErrors: [
-              "rate_limit",
-              "timeout",
-              "network",
-              "ECONNRESET",
-              "ETIMEDOUT",
-              "429",
-            ],
-          }
-        );
+        // Update existing subpage (split into chunks if needed)
+        await this.appendContentToPage(subpageId, content);
       } else {
         // Create new subpage
         const subpage = await retryWithBackoff(
@@ -676,41 +723,8 @@ export class NotionService {
           }
         );
 
-        // Add content to subpage
-        await retryWithBackoff(
-          () =>
-            this.client.blocks.children.append({
-              block_id: subpage.id,
-              children: [
-                {
-                  object: "block",
-                  type: "paragraph",
-                  paragraph: {
-                    rich_text: [
-                      {
-                        type: "text",
-                        text: {
-                          content: content,
-                        },
-                      },
-                    ],
-                  },
-                },
-              ],
-            }),
-          {
-            maxRetries: 3,
-            initialDelay: 1000,
-            retryableErrors: [
-              "rate_limit",
-              "timeout",
-              "network",
-              "ECONNRESET",
-              "ETIMEDOUT",
-              "429",
-            ],
-          }
-        );
+        // Add content to subpage (split into chunks if needed)
+        await this.appendContentToPage(subpage.id, content);
       }
     } catch (error) {
       logger.error("Failed to update subpage:", error);
