@@ -56,6 +56,10 @@ See [ARCHITECTURE.md](./ARCHITECTURE.md) for detailed architecture documentation
 
 See [SETUP.md](./SETUP.md) for detailed setup instructions.
 
+## Deployment
+
+See [DEPLOYMENT.md](./DEPLOYMENT.md) for deployment guides to DigitalOcean, AWS EC2, and other cloud services.
+
 ## Implementation Status
 
 See [STATUS.md](./STATUS.md) for current implementation progress and feature status.
