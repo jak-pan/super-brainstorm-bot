@@ -4,8 +4,8 @@ This guide explains how to deploy the Super Brainstorm Bot using Docker.
 
 ## Prerequisites
 
-- Docker installed (version 20.10+)
-- Docker Compose (optional, for easier management)
+* Docker installed (version 20.10+)
+* Docker Compose (optional, for easier management)
 
 ## Quick Start
 
@@ -58,6 +58,7 @@ docker-compose down
 ### AWS ECS / Fargate
 
 1. Build and push to ECR:
+
 ```bash
 # Login to ECR
 aws ecr get-login-password --region us-east-1 | docker login --username AWS --password-stdin <account-id>.dkr.ecr.us-east-1.amazonaws.com
@@ -71,14 +72,15 @@ docker push <account-id>.dkr.ecr.us-east-1.amazonaws.com/superbrainstormbot:late
 ```
 
 2. Create ECS task definition with:
-   - Image: Your ECR image
-   - Environment variables: Add all from `.env` file
-   - Memory: 512MB minimum (1GB recommended)
-   - CPU: 0.5 vCPU minimum (1 vCPU recommended)
+   * Image: Your ECR image
+   * Environment variables: Add all from `.env` file
+   * Memory: 512MB minimum (1GB recommended)
+   * CPU: 0.5 vCPU minimum (1 vCPU recommended)
 
 ### Google Cloud Run
 
 1. Build and push to GCR:
+
 ```bash
 # Build
 docker build -t gcr.io/<project-id>/superbrainstormbot .
@@ -88,6 +90,7 @@ docker push gcr.io/<project-id>/superbrainstormbot
 ```
 
 2. Deploy:
+
 ```bash
 gcloud run deploy superbrainstormbot \
   --image gcr.io/<project-id>/superbrainstormbot \
@@ -103,6 +106,7 @@ gcloud run deploy superbrainstormbot \
 ### Azure Container Instances
 
 1. Build and push to ACR:
+
 ```bash
 # Login
 az acr login --name <registry-name>
@@ -112,6 +116,7 @@ az acr build --registry <registry-name> --image superbrainstormbot:latest .
 ```
 
 2. Deploy:
+
 ```bash
 az container create \
   --resource-group <resource-group> \
@@ -127,8 +132,8 @@ az container create \
 
 1. Connect your GitHub repository
 2. Configure build:
-   - Build Command: `npm run build`
-   - Run Command: `node dist/index.js`
+   * Build Command: `npm run build`
+   * Run Command: `node dist/index.js`
 3. Add environment variables from your `.env` file
 4. Deploy!
 
@@ -151,15 +156,17 @@ az container create \
 Instead of using `.env` file, set environment variables in your cloud platform:
 
 **Required:**
-- `DISCORD_BOT_TOKEN`
-- `DISCORD_GUILD_ID`
-- `DISCORD_CHANNEL_ID`
-- `OPENROUTER_API_KEY` (provides access to all 300+ AI models)
-- `NOTION_API_KEY`
-- `NOTION_PAGE_ID` (single database/page ID that hosts all topics)
+
+* `DISCORD_BOT_TOKEN`
+* `DISCORD_GUILD_ID`
+* `DISCORD_CHANNEL_ID`
+* `OPENROUTER_API_KEY` (provides access to all 300+ AI models)
+* `NOTION_API_KEY`
+* `NOTION_PAGE_ID` (single database/page ID that hosts all topics)
 
 **Optional:**
-- `LOG_LEVEL` (default: `info`)
+
+* `LOG_LEVEL` (default: `info`)
 
 **Note:** Most configuration (model presets, limits, intervals) is stored in `src/config/default-settings.json` and can be modified via `/sbb settings` command in Discord.
 
@@ -191,19 +198,22 @@ healthServer.listen(3000, () => {
 ## Resource Requirements
 
 **Minimum:**
-- CPU: 0.5 vCPU
-- Memory: 512MB
-- Disk: 1GB
+
+* CPU: 0.5 vCPU
+* Memory: 512MB
+* Disk: 1GB
 
 **Recommended:**
-- CPU: 1 vCPU
-- Memory: 1GB
-- Disk: 2GB
+
+* CPU: 1 vCPU
+* Memory: 1GB
+* Disk: 2GB
 
 **For High Traffic:**
-- CPU: 2 vCPU
-- Memory: 2GB
-- Disk: 5GB
+
+* CPU: 2 vCPU
+* Memory: 2GB
+* Disk: 5GB
 
 ## Monitoring
 
@@ -266,33 +276,34 @@ docker logs superbrainstormbot
 ### Out of Memory
 
 Increase memory limit:
+
 ```bash
 docker run -d --memory="2g" --name superbrainstormbot --env-file .env superbrainstormbot
 ```
 
 ### Can't connect to Discord
 
-- Verify `DISCORD_BOT_TOKEN` is correct
-- Check that MESSAGE CONTENT INTENT is enabled
-- Ensure bot is invited to server with correct permissions
+* Verify `DISCORD_BOT_TOKEN` is correct
+* Check that MESSAGE CONTENT INTENT is enabled
+* Ensure bot is invited to server with correct permissions
 
 ### Notion errors
 
-- Verify `NOTION_API_KEY` is correct
-- Ensure pages are shared with integration
-- Check page IDs are correct
+* Verify `NOTION_API_KEY` is correct
+* Ensure pages are shared with integration
+* Check page IDs are correct
 
 ## Production Checklist
 
-- [ ] All environment variables set in cloud platform
-- [ ] Secrets stored securely (not in code)
-- [ ] Resource limits configured
-- [ ] Health checks enabled
-- [ ] Logging configured
-- [ ] Auto-restart enabled
-- [ ] Monitoring set up
-- [ ] Backup strategy for Notion pages
-- [ ] Rate limiting configured (if needed)
+* \[ ] All environment variables set in cloud platform
+* \[ ] Secrets stored securely (not in code)
+* \[ ] Resource limits configured
+* \[ ] Health checks enabled
+* \[ ] Logging configured
+* \[ ] Auto-restart enabled
+* \[ ] Monitoring set up
+* \[ ] Backup strategy for Notion pages
+* \[ ] Rate limiting configured (if needed)
 
 ## Example: Full Deployment Script
 
@@ -318,9 +329,10 @@ aws ecs update-service \
 ## Support
 
 For issues specific to Docker deployment, check:
-- Docker logs: `docker logs superbrainstormbot`
-- Container status: `docker ps -a`
-- Resource usage: `docker stats superbrainstormbot`
+
+* Docker logs: `docker logs superbrainstormbot`
+* Container status: `docker ps -a`
+* Resource usage: `docker stats superbrainstormbot`
 
 For general bot issues, see `SETUP.md` troubleshooting section.
 
