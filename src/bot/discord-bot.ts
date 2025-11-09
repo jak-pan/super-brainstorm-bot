@@ -319,7 +319,7 @@ export class DiscordBot {
             `✅ All required permissions granted. Proceeding with thread creation.`
           );
 
-          // Create thread with topic as name (truncate to 100 chars if needed)
+          // Create thread with topic as name (truncate to 50 chars if needed)
           const threadName =
             topic.length > 50 ? topic.substring(0, 97) + "..." : topic;
 
@@ -480,16 +480,20 @@ export class DiscordBot {
       }
 
       // Start planning with first message or topic
+      // Use first message if it has content, otherwise use topic
       const firstMessage = conversation.messages[0];
-      const plannerInputMessage: AppMessage = firstMessage || {
-        id: `start-${Date.now()}`,
-        conversationId,
-        authorId: "system",
-        authorType: "user",
-        content: topic,
-        replyTo: [],
-        timestamp: new Date(),
-      };
+      const plannerInputMessage: AppMessage =
+        firstMessage && firstMessage.content?.trim()
+          ? firstMessage
+          : {
+              id: `start-${Date.now()}`,
+              conversationId,
+              authorId: "system",
+              authorType: "user",
+              content: topic || "General discussion",
+              replyTo: [],
+              timestamp: new Date(),
+            };
 
       // Start the planner and await result
       const planningResult = await this.sessionPlanner.handleInitialMessage(
@@ -623,16 +627,20 @@ export class DiscordBot {
       }
 
       // Start planning immediately with first message or topic
+      // Use first message if it has content, otherwise use topic
       const firstMessage = conversation.messages[0];
-      const plannerInputMessage: AppMessage = firstMessage || {
-        id: `plan-${Date.now()}`,
-        conversationId,
-        authorId: "system",
-        authorType: "user",
-        content: topic,
-        replyTo: [],
-        timestamp: new Date(),
-      };
+      const plannerInputMessage: AppMessage =
+        firstMessage && firstMessage.content?.trim()
+          ? firstMessage
+          : {
+              id: `plan-${Date.now()}`,
+              conversationId,
+              authorId: "system",
+              authorType: "user",
+              content: topic || "General discussion",
+              replyTo: [],
+              timestamp: new Date(),
+            };
 
       // Start the planner
       await this.sessionPlanner.handleInitialMessage(
