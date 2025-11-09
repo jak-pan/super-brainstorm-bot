@@ -417,6 +417,7 @@ This document tracks the implementation progress of the Super Brainstorm Bot sys
   * Error handling and retries
   * Single database/page structure with subpages for detailed content
   * **Bug Fix (2025-11-09)**: Fixed Notion API compatibility - replaced `databases.query` (not available in v5.3.0) with `client.search()` API. Added proper type guards to filter search results to only page objects.
+  * **Bug Fix (2025-11-09)**: Fixed hardcoded 'Topic' property requirement - added automatic detection of title property name from database schema. Works with any Notion database regardless of property names.
 
 ***
 

@@ -44,10 +44,39 @@ function isPageObjectResponse(page: NotionPage): page is PageObjectResponse {
 export class NotionService {
   private client: Client;
   private databaseId: string; // Single database/page ID
+  private topicPropertyName: string; // Name of the property used for topic/title
 
-  constructor(apiKey: string, databaseId: string) {
+  constructor(apiKey: string, databaseId: string, topicPropertyName?: string) {
     this.client = new Client({ auth: apiKey });
     this.databaseId = databaseId;
+    this.topicPropertyName = topicPropertyName || "Topic";
+  }
+
+  /**
+   * Get the title property name from the database schema
+   */
+  private async getTitlePropertyName(): Promise<string> {
+    try {
+      const database = await this.client.databases.retrieve({
+        database_id: this.databaseId,
+      });
+
+      // Check if database has properties (might be partial response)
+      if ("properties" in database && database.properties) {
+        // Find the first title property
+        for (const [key, value] of Object.entries(database.properties)) {
+          if (value && typeof value === "object" && "type" in value && value.type === "title") {
+            return key;
+          }
+        }
+      }
+
+      // Fallback to configured name or "Topic"
+      return this.topicPropertyName;
+    } catch (error) {
+      logger.warn("Failed to retrieve database schema, using default property name:", error);
+      return this.topicPropertyName;
+    }
   }
 
   /**
@@ -231,6 +260,9 @@ export class NotionService {
     _conversation: ConversationState
   ): Promise<string> {
     try {
+      // Get the actual title property name from the database schema
+      const titlePropertyName = await this.getTitlePropertyName();
+
       // Search for existing entry with this topic name using search API
       const searchResponse = await this.client.search({
         query: topicName,
@@ -250,9 +282,18 @@ export class NotionService {
         if ("object" in result && result.object === "page" && isPageObjectResponse(result)) {
           // Check if this page belongs to our database
           if (result.parent.type === "database_id" && result.parent.database_id === this.databaseId) {
-            // Check if the topic property matches
-            const topicProperty = result.properties["Topic"];
-            if (topicProperty && topicProperty.type === "title") {
+            // Check if the topic property matches (try configured name first, then any title property)
+            let topicProperty = result.properties[titlePropertyName];
+            if (!topicProperty || topicProperty.type !== "title") {
+              // Fallback: find any title property
+              for (const prop of Object.values(result.properties)) {
+                if (prop && typeof prop === "object" && "type" in prop && prop.type === "title") {
+                  topicProperty = prop;
+                  break;
+                }
+              }
+            }
+            if (topicProperty && topicProperty.type === "title" && "title" in topicProperty) {
               const titleText = topicProperty.title[0]?.plain_text || "";
               if (titleText === topicName) {
                 return result.id;
@@ -262,13 +303,13 @@ export class NotionService {
         }
       }
 
-      // Create new entry
+      // Create new entry using the detected title property name
       const newPage = await this.client.pages.create({
         parent: {
           database_id: this.databaseId,
         },
         properties: {
-          Topic: {
+          [titlePropertyName]: {
             title: [
               {
                 text: {
@@ -501,15 +542,27 @@ export class NotionService {
         },
       });
 
+      // Get the actual title property name from the database schema
+      const titlePropertyName = await this.getTitlePropertyName();
+
       // Filter results to find pages in our database
       for (const result of searchResponse.results) {
         // Type guard: only process page objects
         if ("object" in result && result.object === "page" && isPageObjectResponse(result)) {
           // Check if this page belongs to our database
           if (result.parent.type === "database_id" && result.parent.database_id === this.databaseId) {
-            // Check if the topic property contains the conversation ID
-            const topicProperty = result.properties["Topic"];
-            if (topicProperty && topicProperty.type === "title") {
+            // Check if the topic property contains the conversation ID (try configured name first, then any title property)
+            let topicProperty = result.properties[titlePropertyName];
+            if (!topicProperty || topicProperty.type !== "title") {
+              // Fallback: find any title property
+              for (const prop of Object.values(result.properties)) {
+                if (prop && typeof prop === "object" && "type" in prop && prop.type === "title") {
+                  topicProperty = prop;
+                  break;
+                }
+              }
+            }
+            if (topicProperty && topicProperty.type === "title" && "title" in topicProperty) {
               const titleText = topicProperty.title[0]?.plain_text || "";
               if (titleText.includes(conversationId)) {
                 return { id: result.id };
