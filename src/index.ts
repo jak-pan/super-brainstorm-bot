@@ -109,24 +109,33 @@ async function main() {
             conversation.isThread && conversation.threadId
               ? conversation.threadId
               : conversation.channelId;
-          const channel =
-            discordBotInstance.client.channels.cache.get(channelId);
-          if (channel && (channel.type === 0 || channel.type === 11)) {
-            targetChannel = channel as TextChannel | ThreadChannel;
+          
+          if (channelId) {
+            // Try cache first
+            let channel = discordBotInstance.client.channels.cache.get(channelId);
+            
+            // If not in cache, try to fetch it
+            if (!channel) {
+              try {
+                const fetchedChannel = await discordBotInstance.client.channels.fetch(channelId);
+                if (fetchedChannel) {
+                  channel = fetchedChannel;
+                }
+              } catch (error) {
+                logger.warn(`Failed to fetch channel ${channelId}:`, error);
+              }
+            }
+            
+            if (channel && (channel.type === 0 || channel.type === 11)) {
+              targetChannel = channel as TextChannel | ThreadChannel;
+            }
           }
         }
       }
 
       if (!targetChannel) {
-        const defaultChannel = discordBotInstance.getChannel();
-        if (defaultChannel) {
-          targetChannel = defaultChannel;
-        }
-      }
-
-      if (!targetChannel) {
         logger.warn(
-          "Discord channel not available for posting planner message"
+          `Discord channel not available for posting planner message (conversationId: ${conversationId})`
         );
         return;
       }

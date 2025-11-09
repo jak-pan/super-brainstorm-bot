@@ -8,6 +8,7 @@ import {
   REST,
   Routes,
   ChatInputCommandInteraction,
+  MessageFlags,
 } from "discord.js";
 import type { Config } from "../types/index.js";
 import { ConversationCoordinator } from "../services/conversation-coordinator.js";
@@ -232,7 +233,7 @@ export class DiscordBot {
   private async handleStartCommand(
     interaction: ChatInputCommandInteraction
   ): Promise<void> {
-    await interaction.deferReply({ ephemeral: false });
+    await interaction.deferReply();
 
     try {
       const isInThread = interaction.channel?.isThread();
@@ -397,7 +398,7 @@ export class DiscordBot {
   private async handlePlanCommand(
     interaction: ChatInputCommandInteraction
   ): Promise<void> {
-    await interaction.deferReply({ ephemeral: false });
+    await interaction.deferReply();
 
     try {
       const isInThread = interaction.channel?.isThread();
@@ -525,7 +526,7 @@ export class DiscordBot {
   private async handleEditCommand(
     interaction: ChatInputCommandInteraction
   ): Promise<void> {
-    await interaction.deferReply({ ephemeral: false });
+    await interaction.deferReply();
 
     try {
       const isInThread = interaction.channel?.isThread();
@@ -1024,7 +1025,7 @@ export class DiscordBot {
     if (!isInServer) {
       await interaction.reply({
         content: "This command can only be used in the configured server.",
-        ephemeral: true,
+        flags: MessageFlags.Ephemeral,
       });
       return;
     }
@@ -1033,7 +1034,7 @@ export class DiscordBot {
       if (interaction.commandName !== "sbb") {
         await interaction.reply({
           content: "Unknown command. Use /sbb for all commands.",
-          ephemeral: true,
+          flags: MessageFlags.Ephemeral,
         });
         return;
       }
@@ -1083,7 +1084,7 @@ export class DiscordBot {
         default:
           await interaction.reply({
             content: "Unknown subcommand.",
-            ephemeral: true,
+            flags: MessageFlags.Ephemeral,
           });
       }
     } catch (error) {
@@ -1091,7 +1092,7 @@ export class DiscordBot {
       await interaction
         .reply({
           content: "An error occurred while processing the command.",
-          ephemeral: true,
+          flags: MessageFlags.Ephemeral,
         })
         .catch(() => {});
     }
@@ -1131,7 +1132,7 @@ export class DiscordBot {
     if (!conversationId) {
       await interaction.reply({
         content: "No active conversation found. Start a conversation first.",
-        ephemeral: true,
+        flags: MessageFlags.Ephemeral,
       });
       return;
     }
@@ -1140,7 +1141,7 @@ export class DiscordBot {
     if (!conversation) {
       await interaction.reply({
         content: "Conversation not found.",
-        ephemeral: true,
+        flags: MessageFlags.Ephemeral,
       });
       return;
     }
@@ -1181,7 +1182,7 @@ export class DiscordBot {
           content: `Invalid model IDs: ${invalidModels.join(
             ", "
           )}\nModel IDs should be in format "provider/model-id"`,
-          ephemeral: true,
+          flags: MessageFlags.Ephemeral,
         });
         return;
       }
@@ -1237,7 +1238,7 @@ export class DiscordBot {
     if (!isValidModelId(modelId)) {
       await interaction.reply({
         content: `Invalid model ID: ${modelId}\nModel IDs should be in format "provider/model-id"`,
-        ephemeral: true,
+        flags: MessageFlags.Ephemeral,
       });
       return;
     }
@@ -1248,7 +1249,7 @@ export class DiscordBot {
     if (!conversationId) {
       await interaction.reply({
         content: "No active conversation found. Start a conversation first.",
-        ephemeral: true,
+        flags: MessageFlags.Ephemeral,
       });
       return;
     }
@@ -1257,7 +1258,7 @@ export class DiscordBot {
     if (!conversation) {
       await interaction.reply({
         content: "Conversation not found.",
-        ephemeral: true,
+        flags: MessageFlags.Ephemeral,
       });
       return;
     }
@@ -1265,7 +1266,7 @@ export class DiscordBot {
     if (conversation.selectedModels.includes(modelId)) {
       await interaction.reply({
         content: `Model ${modelId} is already in the conversation.`,
-        ephemeral: true,
+        flags: MessageFlags.Ephemeral,
       });
       return;
     }
@@ -1294,7 +1295,7 @@ export class DiscordBot {
     if (!conversationId) {
       await interaction.reply({
         content: "No active conversation found. Start a conversation first.",
-        ephemeral: true,
+        flags: MessageFlags.Ephemeral,
       });
       return;
     }
@@ -1303,7 +1304,7 @@ export class DiscordBot {
     if (!conversation) {
       await interaction.reply({
         content: "Conversation not found.",
-        ephemeral: true,
+        flags: MessageFlags.Ephemeral,
       });
       return;
     }
@@ -1312,7 +1313,7 @@ export class DiscordBot {
     if (index === -1) {
       await interaction.reply({
         content: `Model ${modelId} is not in the conversation.`,
-        ephemeral: true,
+        flags: MessageFlags.Ephemeral,
       });
       return;
     }
@@ -1341,7 +1342,7 @@ export class DiscordBot {
     if (!conversationId) {
       await interaction.reply({
         content: "No active conversation found. Start a conversation first.",
-        ephemeral: true,
+        flags: MessageFlags.Ephemeral,
       });
       return;
     }
@@ -1350,7 +1351,7 @@ export class DiscordBot {
     if (!conversation) {
       await interaction.reply({
         content: "Conversation not found.",
-        ephemeral: true,
+        flags: MessageFlags.Ephemeral,
       });
       return;
     }
@@ -1383,7 +1384,7 @@ export class DiscordBot {
   private async handleFetchModelsCommand(
     interaction: ChatInputCommandInteraction
   ): Promise<void> {
-    await interaction.deferReply({ ephemeral: true });
+    await interaction.deferReply({ flags: MessageFlags.Ephemeral });
 
     try {
       const provider = interaction.options.getString("provider");
@@ -1443,7 +1444,7 @@ export class DiscordBot {
     if (!channelId) {
       await interaction.reply({
         content: "Invalid channel.",
-        ephemeral: true,
+        flags: MessageFlags.Ephemeral,
       });
       return;
     }
@@ -1452,7 +1453,7 @@ export class DiscordBot {
     if (!conversationId) {
       await interaction.reply({
         content: "No active conversation found. Start a conversation first.",
-        ephemeral: true,
+        flags: MessageFlags.Ephemeral,
       });
       return;
     }
@@ -1461,7 +1462,7 @@ export class DiscordBot {
     if (!conversation) {
       await interaction.reply({
         content: "Conversation not found.",
-        ephemeral: true,
+        flags: MessageFlags.Ephemeral,
       });
       return;
     }
@@ -1469,7 +1470,7 @@ export class DiscordBot {
     if (conversation.status !== "paused") {
       await interaction.reply({
         content: `Conversation is not paused. Current status: ${conversation.status}`,
-        ephemeral: true,
+        flags: MessageFlags.Ephemeral,
       });
       return;
     }
@@ -1512,7 +1513,7 @@ export class DiscordBot {
     if (!channelId) {
       await interaction.reply({
         content: "Invalid channel.",
-        ephemeral: true,
+        flags: MessageFlags.Ephemeral,
       });
       return;
     }
@@ -1521,7 +1522,7 @@ export class DiscordBot {
     if (!conversationId) {
       await interaction.reply({
         content: "No active conversation found.",
-        ephemeral: true,
+        flags: MessageFlags.Ephemeral,
       });
       return;
     }
@@ -1530,7 +1531,7 @@ export class DiscordBot {
     if (!conversation) {
       await interaction.reply({
         content: "Conversation not found.",
-        ephemeral: true,
+        flags: MessageFlags.Ephemeral,
       });
       return;
     }
@@ -1589,7 +1590,7 @@ export class DiscordBot {
       await interaction.reply({
         content:
           "Cannot disable manager, scribe, tldr, or image agents. These are required for conversation management.",
-        ephemeral: true,
+        flags: MessageFlags.Ephemeral,
       });
       return;
     }
@@ -1602,7 +1603,7 @@ export class DiscordBot {
         content: `Agent ${agentModelId} is not active in the conversation. Active agents: ${
           activeAgents.join(", ") || "none"
         }`,
-        ephemeral: true,
+        flags: MessageFlags.Ephemeral,
       });
       return;
     }
@@ -1615,7 +1616,7 @@ export class DiscordBot {
     if (conversation.disabledAgents.includes(agentModelId)) {
       await interaction.reply({
         content: `Agent ${agentModelId} is already disabled.`,
-        ephemeral: true,
+        flags: MessageFlags.Ephemeral,
       });
       return;
     }
@@ -1639,7 +1640,7 @@ export class DiscordBot {
   private async handleImageCommand(
     interaction: ChatInputCommandInteraction
   ): Promise<void> {
-    await interaction.deferReply({ ephemeral: false });
+    await interaction.deferReply();
 
     try {
       const messageLink = interaction.options.getString("message-link");
@@ -1918,7 +1919,7 @@ export class DiscordBot {
   private async handleUnblockImageCommand(
     interaction: ChatInputCommandInteraction
   ): Promise<void> {
-    await interaction.deferReply({ ephemeral: false });
+    await interaction.deferReply();
 
     try {
       const channelId = interaction.channel?.id;
