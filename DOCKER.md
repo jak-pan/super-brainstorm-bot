@@ -2,6 +2,8 @@
 
 This guide explains how to run the Super Brainstorm Bot using Docker.
 
+**For comprehensive deployment guides to cloud services (DigitalOcean, AWS EC2, etc.), see [DEPLOYMENT.md](./DEPLOYMENT.md).**
+
 ## Prerequisites
 
 - Docker installed (version 20.10+)
@@ -154,18 +156,16 @@ Instead of using `.env` file, set environment variables in your cloud platform:
 - `DISCORD_BOT_TOKEN`
 - `DISCORD_GUILD_ID`
 - `DISCORD_CHANNEL_ID`
-- `OPENAI_API_KEY` (or `ANTHROPIC_API_KEY`)
+- `OPENROUTER_API_KEY` (provides access to all 300+ AI models)
 - `NOTION_API_KEY`
-- `NOTION_REASONING_PAGE_ID`
-- `NOTION_TLDR_PAGE_ID`
+- `NOTION_PAGE_ID` (single database/page ID that hosts all topics)
 
-**Optional (with defaults):**
-- `OPENAI_MODEL`
-- `ANTHROPIC_MODEL`
-- `MAX_MESSAGES_PER_CONVERSATION`
-- `MAX_TOKENS_PER_CONVERSATION`
-- `LOG_LEVEL`
-- ... (see `.env.example` for full list)
+**Optional:**
+- `LOG_LEVEL` (default: `info`)
+
+**Note:** Most configuration (model presets, limits, intervals) is stored in `src/config/default-settings.json` and can be modified via `/sbb settings` command in Discord.
+
+See `.env.example` for the complete list.
 
 ## Health Checks
 

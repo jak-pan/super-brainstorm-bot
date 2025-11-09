@@ -5,9 +5,11 @@ This guide covers deploying the Super Brainstorm Bot to cloud services like Digi
 ## Quick Start Options
 
 ### Option 1: Docker Deployment (Recommended)
+
 The easiest way to deploy is using Docker. See [DOCKER.md](./DOCKER.md) for Docker-specific instructions.
 
 ### Option 2: Direct Node.js Deployment
+
 Deploy directly on a VPS with Node.js installed.
 
 ## Supported Platforms
@@ -124,6 +126,7 @@ nano .env  # Edit with your credentials
 ```
 
 **Configure `.env` file:**
+
 ```env
 DISCORD_BOT_TOKEN=your_discord_bot_token_here
 DISCORD_GUILD_ID=your_guild_id_here
@@ -231,7 +234,7 @@ sudo journalctl -u sbb-bot -f
    ```bash
    # With PM2
    pm2 status
-   
+
    # With systemd
    sudo systemctl status sbb-bot
    ```
@@ -240,7 +243,7 @@ sudo journalctl -u sbb-bot -f
    ```bash
    # With PM2
    pm2 logs sbb-bot --lines 50
-   
+
    # With systemd
    sudo journalctl -u sbb-bot -n 50
    ```
@@ -334,10 +337,11 @@ sudo journalctl -u sbb-bot -b
 ### Health Checks
 
 The bot logs important events. Monitor for:
-- Connection errors
-- API rate limit warnings
-- Cost limit warnings
-- Notion update failures
+
+* Connection errors
+* API rate limit warnings
+* Cost limit warnings
+* Notion update failures
 
 ## Troubleshooting
 
@@ -400,16 +404,16 @@ The bot logs important events. Monitor for:
 ### Discord API Errors
 
 1. **Check rate limits:**
-   - Look for rate limit warnings in logs
-   - The bot has built-in rate limiting, but check if it's working
+   * Look for rate limit warnings in logs
+   * The bot has built-in rate limiting, but check if it's working
 
 2. **Verify bot token:**
-   - Ensure token is correct in `.env`
-   - Check if token was regenerated
+   * Ensure token is correct in `.env`
+   * Check if token was regenerated
 
 3. **Check bot permissions:**
-   - Ensure bot has required permissions in Discord
-   - Verify MESSAGE CONTENT INTENT is enabled
+   * Ensure bot has required permissions in Discord
+   * Verify MESSAGE CONTENT INTENT is enabled
 
 ## Security Best Practices
 
@@ -438,8 +442,8 @@ The bot logs important events. Monitor for:
    ```
 
 5. **Use SSH keys instead of passwords:**
-   - Disable password authentication in SSH
-   - Use key-based authentication only
+   * Disable password authentication in SSH
+   * Use key-based authentication only
 
 ## Backup
 
@@ -499,4 +503,3 @@ If you encounter issues:
 4. Check system resources (memory, disk)
 5. Review [SETUP.md](./SETUP.md) for setup issues
 6. Check [Troubleshooting](#troubleshooting) section above
-
