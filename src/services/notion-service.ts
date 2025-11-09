@@ -77,21 +77,23 @@ export class NotionService {
         const database = await this.client.databases.retrieve({
           database_id: this.databaseId,
         });
-        // Check if it has the Topic property
-        if (
-          "properties" in database &&
-          database.properties &&
-          typeof database.properties === "object" &&
-          "Topic" in database.properties
-        ) {
-          return this.databaseId;
-        } else {
-          // Database exists but doesn't have Topic property, reset and find/create new one
-          logger.warn(
-            `Database ${this.databaseId} exists but doesn't have Topic property, creating new one`
+        // Check if it has a title property (Topic or Name)
+        if ("properties" in database && database.properties && typeof database.properties === "object") {
+          const hasTopic = "Topic" in database.properties;
+          const hasName = "Name" in database.properties;
+          const hasTitleProperty = Object.values(database.properties).some(
+            (prop) => prop && typeof prop === "object" && "type" in prop && prop.type === "title"
           );
-          this.databaseId = null;
+          
+          if (hasTopic || (hasName && hasTitleProperty)) {
+            return this.databaseId;
+          }
         }
+        // Database exists but doesn't have title property, reset and find/create new one
+        logger.warn(
+          `Database ${this.databaseId} exists but doesn't have title property, creating new one`
+        );
+        this.databaseId = null;
       } catch (error) {
         // Database was deleted, reset and create new one
         logger.warn(
@@ -117,16 +119,28 @@ export class NotionService {
             const database = await this.client.databases.retrieve({
               database_id: block.id,
             });
-            // Check if it has the Topic property
+            // Check if it has a title property (Topic or Name)
             if (
               "properties" in database &&
               database.properties &&
-              typeof database.properties === "object" &&
-              "Topic" in database.properties
+              typeof database.properties === "object"
             ) {
-              this.databaseId = block.id;
-              logger.info(`Found existing database: ${this.databaseId}`);
-              return this.databaseId;
+              // Check for Topic first, then Name (title property)
+              const hasTopic = "Topic" in database.properties;
+              const hasName = "Name" in database.properties;
+              const hasTitleProperty = Object.values(database.properties).some(
+                (prop) =>
+                  prop &&
+                  typeof prop === "object" &&
+                  "type" in prop &&
+                  prop.type === "title"
+              );
+
+              if (hasTopic || (hasName && hasTitleProperty)) {
+                this.databaseId = block.id;
+                logger.info(`Found existing database: ${this.databaseId}`);
+                return this.databaseId;
+              }
             }
           } catch (error) {
             // Database doesn't exist or can't be accessed, continue
@@ -156,7 +170,7 @@ export class NotionService {
           },
         ],
         properties: {
-          Topic: {
+          Name: {
             title: {},
           },
         },
@@ -166,6 +180,51 @@ export class NotionService {
         throw new Error("Database creation succeeded but no ID returned");
       }
       const dbId = database.id;
+
+      // Notion creates a default "Name" property, so we need to rename it to "Topic"
+      try {
+        logger.info(
+          `Renaming 'Name' property to 'Topic' in database ${dbId}...`
+        );
+        // Get the database to find the Name property ID
+        const db = await this.client.databases.retrieve({
+          database_id: dbId,
+        });
+
+        // Find the Name property (should be the title property)
+        if ("properties" in db && db.properties) {
+          const nameProperty = Object.entries(db.properties).find(
+            ([_, prop]) =>
+              prop &&
+              typeof prop === "object" &&
+              "type" in prop &&
+              prop.type === "title"
+          );
+
+          if (nameProperty) {
+            const [propName] = nameProperty;
+            // Update the database to rename the property
+            // eslint-disable-next-line @typescript-eslint/no-explicit-any
+            await (this.client.databases.update as any)({
+              database_id: dbId,
+              properties: {
+                [propName]: {
+                  name: "Topic",
+                },
+              },
+            });
+            logger.info(`Successfully renamed property to 'Topic'`);
+          }
+        }
+      } catch (error) {
+        logger.warn(
+          "Failed to rename property to 'Topic', will use 'Name' instead:",
+          error
+        );
+        // If renaming fails, we'll use "Name" as fallback
+        // Update the code to handle both "Name" and "Topic"
+      }
+
       this.databaseId = dbId;
       logger.info(`Created new database: ${dbId}`);
       return dbId;
@@ -418,8 +477,9 @@ export class NotionService {
             result.parent.type === "database_id" &&
             result.parent.database_id === databaseId
           ) {
-            // Check if the Topic property matches
-            const topicProperty = result.properties["Topic"];
+            // Check if the Topic or Name property matches (try Topic first, then Name)
+            const topicProperty =
+              result.properties["Topic"] || result.properties["Name"];
             if (
               topicProperty &&
               topicProperty.type === "title" &&
@@ -434,13 +494,44 @@ export class NotionService {
         }
       }
 
+      // Get the database to find the correct property name (Topic or Name)
+      const db = await this.client.databases.retrieve({
+        database_id: databaseId,
+      });
+
+      // Find the title property name (Topic or Name)
+      let titlePropertyName = "Topic";
+      if (
+        "properties" in db &&
+        db.properties &&
+        typeof db.properties === "object"
+      ) {
+        if ("Topic" in db.properties) {
+          titlePropertyName = "Topic";
+        } else if ("Name" in db.properties) {
+          titlePropertyName = "Name";
+        } else {
+          // Find any title property
+          const titleProp = Object.entries(db.properties).find(
+            ([_, prop]) =>
+              prop &&
+              typeof prop === "object" &&
+              "type" in prop &&
+              prop.type === "title"
+          );
+          if (titleProp) {
+            titlePropertyName = titleProp[0];
+          }
+        }
+      }
+
       // Create new entry
       const newPage = await this.client.pages.create({
         parent: {
           database_id: databaseId,
         },
         properties: {
-          Topic: {
+          [titlePropertyName]: {
             title: [
               {
                 text: {
@@ -708,8 +799,9 @@ export class NotionService {
             result.parent.type === "database_id" &&
             result.parent.database_id === databaseId
           ) {
-            // Check if the Topic property contains the conversation ID
-            const topicProperty = result.properties["Topic"];
+            // Check if the Topic or Name property contains the conversation ID
+            const topicProperty =
+              result.properties["Topic"] || result.properties["Name"];
             if (
               topicProperty &&
               topicProperty.type === "title" &&
