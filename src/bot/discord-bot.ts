@@ -50,6 +50,7 @@ export class DiscordBot {
   private sessionPlanner: SessionPlanner;
   private activeConversations: Map<string, string> = new Map(); // channelId -> conversationId
   private rateLimiter: DiscordRateLimiter;
+  private thinkingMessages: Map<string, Message> = new Map(); // conversationId -> thinking message
 
   /**
    * Create a new Discord bot instance
@@ -137,6 +138,16 @@ export class DiscordBot {
    */
   private async handleMessage(discordMessage: Message): Promise<void> {
     try {
+      logger.info(
+        `Received message from ${discordMessage.author.tag} (${
+          discordMessage.author.id
+        }) in channel ${
+          discordMessage.channel.id
+        }: ${discordMessage.content.substring(0, 100)}${
+          discordMessage.content.length > 100 ? "..." : ""
+        }`
+      );
+
       // Get or create conversation
       // Use thread ID if in a thread, otherwise use channel ID
       const channelId = discordMessage.channel.id;
@@ -150,6 +161,12 @@ export class DiscordBot {
         thread
       );
       const conversation = this.contextManager.getConversation(conversationId);
+
+      logger.info(
+        `Processing message for conversation ${conversationId} (status: ${
+          conversation?.status || "new"
+        })`
+      );
 
       // Convert Discord message to app message
       const appMessage: AppMessage = {
@@ -167,12 +184,18 @@ export class DiscordBot {
 
       // Handle planning phase
       if (conversation && conversation.status === "planning") {
+        logger.info(
+          `Handling message in planning phase for conversation ${conversationId}`
+        );
         // Add message to context first
         this.contextManager.addMessage(conversationId, appMessage);
 
         // If this is the first message and planning hasn't started yet, start planning
         // Check if planningState exists to avoid duplicate calls
         if (conversation.messages.length === 1 && !conversation.planningState) {
+          logger.info(
+            `Starting initial planning for conversation ${conversationId}`
+          );
           await this.sessionPlanner.handleInitialMessage(
             conversationId,
             appMessage
@@ -181,6 +204,9 @@ export class DiscordBot {
           // If plan was created, it will wait for /sbb start
           return;
         } else if (conversation.messages.length > 1) {
+          logger.info(
+            `Handling planning response for conversation ${conversationId}`
+          );
           // Handle planning response - this creates plan if questions were answered
           await this.sessionPlanner.handlePlanningResponse(
             conversationId,
@@ -196,8 +222,23 @@ export class DiscordBot {
 
       // Handle active conversation
       if (conversation && conversation.status === "active") {
+        logger.info(
+          `Handling message in active conversation ${conversationId}`
+        );
+
+        // Post thinking message immediately for user feedback
+        const channel = thread || (discordMessage.channel as TextChannel);
+        await this.postThinkingMessage(
+          conversationId,
+          channel,
+          discordMessage.id
+        );
+
         // Add message to context first
         this.contextManager.addMessage(conversationId, appMessage);
+        logger.info(
+          `Added message to context for conversation ${conversationId} (total messages: ${conversation.messages.length})`
+        );
 
         // Notify session planner for moderation (async)
         this.sessionPlanner
@@ -207,6 +248,9 @@ export class DiscordBot {
           });
 
         // Handle the message in coordinator
+        logger.info(
+          `Triggering AI response generation for conversation ${conversationId}`
+        );
         await this.conversationCoordinator.handleNewMessage(
           conversationId,
           appMessage
@@ -929,16 +973,120 @@ export class DiscordBot {
   }
 
   /**
+   * Post a "thinking" message to show the bot is processing
+   * This provides immediate feedback to users
+   *
+   * @param conversationId - The conversation ID
+   * @param channel - Discord text channel to post to
+   * @param replyToMessageId - Optional message ID to reply to
+   * @returns The sent thinking message, or null if failed
+   */
+  private async postThinkingMessage(
+    conversationId: string,
+    channel: TextChannel | ThreadChannel,
+    replyToMessageId?: string
+  ): Promise<Message | null> {
+    try {
+      // Don't post if there's already a thinking message
+      if (this.thinkingMessages.has(conversationId)) {
+        return this.thinkingMessages.get(conversationId) || null;
+      }
+
+      logger.info(
+        `Posting thinking message for conversation ${conversationId} in channel ${channel.id}`
+      );
+
+      let replyToMessage: Message | null = null;
+      if (replyToMessageId) {
+        replyToMessage = await channel.messages
+          .fetch(replyToMessageId)
+          .catch(() => null);
+      }
+
+      const thinkingMessage = await channel.send({
+        content: "🤔 *Thinking...*",
+        reply: replyToMessage
+          ? { messageReference: replyToMessage }
+          : undefined,
+      });
+
+      this.thinkingMessages.set(conversationId, thinkingMessage);
+      return thinkingMessage;
+    } catch (error) {
+      logger.error("Error posting thinking message:", error);
+      return null;
+    }
+  }
+
+  /**
+   * Update or delete the thinking message when a response is ready
+   * Public method to be called from response callbacks
+   *
+   * @param conversationId - The conversation ID
+   * @param responseCount - Number of responses being posted (to decide if we should delete or update)
+   */
+  async clearThinkingMessage(
+    conversationId: string,
+    responseCount: number = 1
+  ): Promise<void> {
+    try {
+      const thinkingMessage = this.thinkingMessages.get(conversationId);
+      if (!thinkingMessage) {
+        return;
+      }
+
+      // If multiple responses, just delete the thinking message
+      // If single response, we'll let it be replaced by the actual response
+      if (responseCount > 1) {
+        logger.info(
+          `Deleting thinking message for conversation ${conversationId} (${responseCount} responses)`
+        );
+        await thinkingMessage.delete().catch((error) => {
+          logger.warn("Error deleting thinking message:", error);
+        });
+      } else {
+        // For single response, update to show it's ready
+        logger.info(
+          `Updating thinking message for conversation ${conversationId} (response ready)`
+        );
+        await thinkingMessage.edit("✅ *Response ready*").catch((error) => {
+          logger.warn("Error updating thinking message:", error);
+        });
+        // Delete after a short delay
+        setTimeout(() => {
+          thinkingMessage.delete().catch(() => {
+            // Ignore errors when deleting
+          });
+        }, 2000);
+      }
+
+      this.thinkingMessages.delete(conversationId);
+    } catch (error) {
+      logger.error("Error clearing thinking message:", error);
+      // Clean up the map entry even if deletion fails
+      this.thinkingMessages.delete(conversationId);
+    }
+  }
+
+  /**
    * Post an AI response to Discord with rate limiting and retry logic
    *
    * @param channel - Discord text channel to post to
    * @param response - AI response with content, replyTo, and model
+   * @param conversationId - The conversation ID (optional, used to clear thinking message)
    * @returns The sent Discord message, or null if failed
    */
   async postAIResponse(
     channel: TextChannel | ThreadChannel,
-    response: { content: string; replyTo: string[]; model: string }
+    response: { content: string; replyTo: string[]; model: string },
+    conversationId?: string
   ): Promise<Message | null> {
+    logger.info(
+      `Posting AI response from ${response.model} to channel ${channel.id}${
+        conversationId ? ` (conversation ${conversationId})` : ""
+      }`
+    );
+
     return retryWithBackoff(
       async () => {
         // Wait for rate limit if needed
@@ -963,6 +1111,24 @@ export class DiscordBot {
             : undefined,
         });
 
+        // Clear thinking message after first response is posted
+        if (conversationId) {
+          const thinkingMessage = this.thinkingMessages.get(conversationId);
+          if (thinkingMessage) {
+            logger.info(
+              `Clearing thinking message for conversation ${conversationId} after posting response`
+            );
+            // Delete the thinking message immediately
+            thinkingMessage.delete().catch((error) => {
+              logger.warn("Error deleting thinking message:", error);
+            });
+            this.thinkingMessages.delete(conversationId);
+          }
+        }
+
+        logger.info(
+          `Successfully posted AI response from ${response.model} (message ID: ${sentMessage.id})`
+        );
         return sentMessage;
       },
       {

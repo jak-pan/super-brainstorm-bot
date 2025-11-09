@@ -83,13 +83,17 @@ async function main() {
         return;
       }
 
+      logger.info(
+        `Posting response from ${response.model} for conversation ${response.conversationId}`
+      );
       await discordBotInstance.postAIResponse(
         channel as TextChannel | ThreadChannel,
         {
           content: response.content,
           replyTo: response.replyTo,
           model: response.model,
-        }
+        },
+        response.conversationId
       );
     };
 

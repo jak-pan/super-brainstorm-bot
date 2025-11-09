@@ -69,8 +69,14 @@ export class ConversationCoordinator {
     conversationId: string,
     message: Message
   ): Promise<void> {
+    logger.info(
+      `Handling new message in conversation coordinator for conversation ${conversationId}`
+    );
     const conversation = this.contextManager.getConversation(conversationId);
     if (!conversation || conversation.status !== "active") {
+      logger.warn(
+        `Conversation ${conversationId} not found or not active (status: ${conversation?.status || "not found"})`
+      );
       return;
     }
 
@@ -102,11 +108,17 @@ export class ConversationCoordinator {
 
     // Refresh context if needed
     if (this.contextManager.shouldRefreshContext(conversationId)) {
+      logger.info(
+        `Refreshing context for conversation ${conversationId} (message count: ${conversation.messages.length})`
+      );
       await this.contextManager.refreshContext(conversationId);
     }
 
     // Add message to context
     this.contextManager.addMessage(conversationId, message);
+    logger.info(
+      `Added message to context for conversation ${conversationId} (total: ${conversation.messages.length})`
+    );
 
     // Track recent messages for batching
     if (!this.recentMessages.has(conversationId)) {
@@ -125,8 +137,14 @@ export class ConversationCoordinator {
 
     // Determine which AIs should respond
     const shouldRespond = this.shouldAIsRespond(message, conversationId);
+    logger.info(
+      `Should AIs respond to message in conversation ${conversationId}: ${shouldRespond}`
+    );
 
     if (shouldRespond) {
+      logger.info(
+        `Triggering AI responses for conversation ${conversationId}`
+      );
       await this.triggerAIResponses(conversationId, message);
     }
   }
@@ -154,11 +172,22 @@ export class ConversationCoordinator {
     conversationId: string,
     _triggerMessage: Message
   ): Promise<void> {
+    logger.info(
+      `Triggering AI responses for conversation ${conversationId}`
+    );
     const conversation = this.contextManager.getConversation(conversationId);
-    if (!conversation) return;
+    if (!conversation) {
+      logger.warn(
+        `Conversation ${conversationId} not found when triggering AI responses`
+      );
+      return;
+    }
 
     const messages = this.contextManager.getMessages(conversationId);
     const recent = this.recentMessages.get(conversationId) || [];
+    logger.info(
+      `Preparing to generate responses for conversation ${conversationId} (context: ${messages.length} messages, recent: ${recent.length})`
+    );
 
     // Determine which messages to reply to (for batching)
     const replyTo = recent
@@ -171,11 +200,19 @@ export class ConversationCoordinator {
       .map((r) => r.message.id)
       .slice(0, MAX_MESSAGE_REFERENCES);
 
+    logger.info(
+      `Reply-to messages for conversation ${conversationId}: ${replyTo.length} messages`
+    );
+
     // Get adapters for selected models, excluding disabled agents
     const selectedModels = conversation.selectedModels || [];
     const disabledAgents = conversation.disabledAgents || [];
     const activeModels = selectedModels.filter(
       (modelId) => !disabledAgents.includes(modelId)
+    );
+
+    logger.info(
+      `Active models for conversation ${conversationId}: ${activeModels.length} (selected: ${selectedModels.length}, disabled: ${disabledAgents.length})`
     );
 
     // Track active agents
@@ -194,6 +231,13 @@ export class ConversationCoordinator {
       const adapter = this.adapterRegistry.getAdapter(modelId);
       if (adapter) {
         availableAdapters.push(adapter);
+        logger.info(
+          `Found adapter for model ${modelId} in conversation ${conversationId}`
+        );
+      } else {
+        logger.warn(
+          `No adapter found for model ${modelId} in conversation ${conversationId}`
+        );
       }
     }
 
@@ -205,11 +249,17 @@ export class ConversationCoordinator {
     // Limit number of responses per turn
     const maxResponses = this.config.limits.maxAIResponsesPerTurn;
     const adaptersToUse = availableAdapters.slice(0, maxResponses);
+    logger.info(
+      `Using ${adaptersToUse.length} adapters (max: ${maxResponses}) for conversation ${conversationId}`
+    );
 
     // Generate responses in parallel
     const responsePromises = adaptersToUse.map((adapter) =>
       this.responseQueue.add(async () => {
         try {
+          logger.info(
+            `Generating response from ${adapter.getModelName()} for conversation ${conversationId}`
+          );
           return await this.generateAIResponse(
             conversationId,
             adapter,
@@ -226,17 +276,23 @@ export class ConversationCoordinator {
       })
     );
 
+    logger.info(
+      `Waiting for ${responsePromises.length} AI responses for conversation ${conversationId}`
+    );
     const responses = await Promise.all(responsePromises);
 
     // Filter out null responses (failed)
     const validResponses = responses.filter((r): r is AIResponse => r !== null);
 
     logger.info(
-      `Generated ${validResponses.length} AI responses for conversation ${conversationId}`
+      `Generated ${validResponses.length}/${responses.length} successful AI responses for conversation ${conversationId}`
     );
 
     // Post responses to Discord if callback is provided
     if (this.responseCallback) {
+      logger.info(
+        `Posting ${validResponses.length} responses to Discord for conversation ${conversationId}`
+      );
       for (const response of validResponses) {
         try {
           await this.responseCallback({ ...response, conversationId });
@@ -244,6 +300,10 @@ export class ConversationCoordinator {
           logger.error(`Error posting response to Discord:`, error);
         }
       }
+    } else {
+      logger.warn(
+        `No response callback configured for conversation ${conversationId}`
+      );
     }
 
     return Promise.resolve();
