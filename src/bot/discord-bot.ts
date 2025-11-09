@@ -272,7 +272,9 @@ export class DiscordBot {
 
         try {
           // Check if bot has permission to create threads
-          const botMember = await interaction.guild?.members.fetch(this.client.user!.id);
+          const botMember = await interaction.guild?.members.fetch(
+            this.client.user!.id
+          );
           const permissions = interaction.channel.permissionsFor(botMember!);
           if (!permissions?.has("CreatePublicThreads")) {
             throw new Error(
