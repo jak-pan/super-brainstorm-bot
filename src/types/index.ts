@@ -114,7 +114,6 @@ export interface Config {
   discord: {
     token: string;
     guildId: string;
-    channelId: string;
   };
   openrouter: {
     apiKey: string;

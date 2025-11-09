@@ -159,7 +159,6 @@ Instead of using `.env` file, set environment variables in your cloud platform:
 
 * `DISCORD_BOT_TOKEN`
 * `DISCORD_GUILD_ID`
-* `DISCORD_CHANNEL_ID`
 * `OPENROUTER_API_KEY` (provides access to all 300+ AI models)
 * `NOTION_API_KEY`
 * `NOTION_PAGE_ID` (single database/page ID that hosts all topics)

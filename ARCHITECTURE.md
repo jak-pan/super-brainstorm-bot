@@ -914,7 +914,6 @@ interface AIResponse {
 # Discord
 DISCORD_BOT_TOKEN=
 DISCORD_GUILD_ID=
-DISCORD_CHANNEL_ID=
 
 # OpenRouter (provides access to all AI models)
 OPENROUTER_API_KEY=your_openrouter_api_key_here

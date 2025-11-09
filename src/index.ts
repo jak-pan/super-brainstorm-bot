@@ -58,7 +58,14 @@ async function main() {
       const channelId =
         conversation?.isThread && conversation.threadId
           ? conversation.threadId
-          : conversation?.channelId || config.discord.channelId;
+          : conversation?.channelId;
+      
+      if (!channelId) {
+        logger.warn(
+          `No channel ID found for conversation ${response.conversationId}`
+        );
+        return;
+      }
 
       const channel = discordBotInstance.client.channels.cache.get(channelId);
       if (!channel) {

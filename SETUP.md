@@ -32,7 +32,6 @@ Or create it manually with the following content:
 # Discord Configuration (required)
 DISCORD_BOT_TOKEN=your_discord_bot_token_here
 DISCORD_GUILD_ID=your_guild_id_here
-DISCORD_CHANNEL_ID=your_channel_id_here
 
 # OpenRouter Configuration (required)
 # OpenRouter provides access to 300+ AI models from multiple providers
@@ -208,8 +207,8 @@ npm start
 ### Bot doesn't respond
 
 * ✅ Check that the bot is online in Discord
-* ✅ Verify `DISCORD_CHANNEL_ID` matches the channel you're using
 * ✅ Ensure MESSAGE CONTENT INTENT is enabled in Discord Developer Portal
+* ✅ Check that the bot has permissions in the channel/thread you're using
 * ✅ Check console logs for errors
 
 ### "Missing required environment variables" error
@@ -220,9 +219,9 @@ npm start
 
 ### "Discord bot logged in" but no response
 
-* ✅ Verify the channel ID is correct
-* ✅ Check that the bot has permissions in that channel
+* ✅ Check that the bot has permissions in the channel/thread you're using
 * ✅ Ensure the bot can see the channel (not hidden)
+* ✅ Verify the bot is in the correct server (guild)
 
 ### Notion errors
 

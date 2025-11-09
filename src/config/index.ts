@@ -8,7 +8,6 @@ export function loadConfig(): Config {
   const requiredEnvVars = [
     "DISCORD_BOT_TOKEN",
     "DISCORD_GUILD_ID",
-    "DISCORD_CHANNEL_ID",
     "NOTION_API_KEY",
     "NOTION_PAGE_ID", // Single database/page ID
   ];
@@ -34,7 +33,6 @@ export function loadConfig(): Config {
     discord: {
       token: process.env.DISCORD_BOT_TOKEN!,
       guildId: process.env.DISCORD_GUILD_ID!,
-      channelId: process.env.DISCORD_CHANNEL_ID!,
     },
     openrouter: {
       apiKey: process.env.OPENROUTER_API_KEY!,

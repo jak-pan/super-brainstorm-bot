@@ -100,7 +100,7 @@ superbrainstormbot/
 ```typescript
 // src/config/index.ts
 export interface Config {
-  discord: { token: string; guildId: string; channelId: string };
+  discord: { token: string; guildId: string };
   openai: { apiKey: string; model: string };
   anthropic: { apiKey: string; model: string };
   grok: { apiKey: string; model: string };

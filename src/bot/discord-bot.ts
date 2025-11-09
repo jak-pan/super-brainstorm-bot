@@ -106,14 +106,11 @@ export class DiscordBot {
         return;
       }
 
-      // Process messages in configured channel OR any thread in the server
-      const isInConfiguredChannel =
-        message.channel.id === this.config.discord.channelId;
-      const isInThread = message.channel.isThread();
-      const isInServerThread =
-        isInThread && message.guild?.id === this.config.discord.guildId;
+      // Process messages in any channel or thread in the server
+      const isInServer =
+        message.guild?.id === this.config.discord.guildId;
 
-      if (!isInConfiguredChannel && !isInServerThread) {
+      if (!isInServer) {
         return;
       }
 
@@ -1022,17 +1019,13 @@ export class DiscordBot {
   private async handleSlashCommand(
     interaction: ChatInputCommandInteraction
   ): Promise<void> {
-    // Allow commands in configured channel OR any thread in the server
-    const isInConfiguredChannel =
-      interaction.channel?.id === this.config.discord.channelId;
-    const isInThread = interaction.channel?.isThread();
-    const isInServerThread =
-      isInThread && interaction.guild?.id === this.config.discord.guildId;
+    // Allow commands in any channel or thread in the server
+    const isInServer =
+      interaction.guild?.id === this.config.discord.guildId;
 
-    if (!isInConfiguredChannel && !isInServerThread) {
+    if (!isInServer) {
       await interaction.reply({
-        content:
-          "This command can only be used in the configured channel or server threads.",
+        content: "This command can only be used in the configured server.",
         ephemeral: true,
       });
       return;
@@ -1983,14 +1976,12 @@ export class DiscordBot {
   }
 
   /**
-   * Get the configured Discord text channel
+   * Get the configured Discord text channel (deprecated - bot works in any channel/thread)
    *
-   * @returns The text channel, or null if not found or not a text channel
+   * @returns null (deprecated method)
    */
   getChannel(): TextChannel | null {
-    const channel = this.client.channels.cache.get(
-      this.config.discord.channelId
-    );
-    return channel instanceof TextChannel ? channel : null;
+    // Deprecated: Bot now works in any channel/thread in the server
+    return null;
   }
 }
