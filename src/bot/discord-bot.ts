@@ -274,40 +274,47 @@ export class DiscordBot {
         });
 
         try {
+          logger.info(`Interaction guild ID: ${interaction.guild?.id}`);
+          logger.info(`Bot user ID: ${this.client.user?.id}`);
           // Check if bot has required permissions
+          logger.info(`Fetching bot member...`);
           const botMember = await interaction.guild?.members.fetch(
             this.client.user!.id
           );
           const permissions = channel.permissionsFor(botMember!);
-          
+
           logger.info(
             `Checking permissions for thread creation in channel ${channelId}`
           );
-          
+
           // Check for Send Messages permission (needed to send starter message)
           const hasSendMessages = permissions?.has("SendMessages");
           logger.info(
-            `Send Messages permission: ${hasSendMessages ? "✅ Granted" : "❌ Missing"}`
+            `Send Messages permission: ${
+              hasSendMessages ? "✅ Granted" : "❌ Missing"
+            }`
           );
-          
+
           if (!hasSendMessages) {
             throw new Error(
               "Bot does not have permission to send messages in this channel. Please grant 'Send Messages' permission."
             );
           }
-          
+
           // Check for Create Public Threads permission
           const hasCreateThreads = permissions?.has("CreatePublicThreads");
           logger.info(
-            `Create Public Threads permission: ${hasCreateThreads ? "✅ Granted" : "❌ Missing"}`
+            `Create Public Threads permission: ${
+              hasCreateThreads ? "✅ Granted" : "❌ Missing"
+            }`
           );
-          
+
           if (!hasCreateThreads) {
             throw new Error(
               "Bot does not have permission to create threads. Please grant 'Create Public Threads' permission."
             );
           }
-          
+
           logger.info(
             `✅ All required permissions granted. Proceeding with thread creation.`
           );
