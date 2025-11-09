@@ -51,6 +51,7 @@ export class DiscordBot {
   private activeConversations: Map<string, string> = new Map(); // channelId -> conversationId
   private rateLimiter: DiscordRateLimiter;
   private thinkingMessages: Map<string, Message> = new Map(); // conversationId -> thinking message
+  private killed: boolean = false; // Bot kill state - when true, only /sbb revive works
 
   /**
    * Create a new Discord bot instance
@@ -138,6 +139,14 @@ export class DiscordBot {
    */
   private async handleMessage(discordMessage: Message): Promise<void> {
     try {
+      // If bot is killed, ignore all messages (revive can only be done via slash command)
+      if (this.killed) {
+        logger.info(
+          `Bot is killed, ignoring message from ${discordMessage.author.tag} in channel ${discordMessage.channel.id}`
+        );
+        return;
+      }
+
       logger.info(
         `Received message from ${discordMessage.author.tag} (${
           discordMessage.author.id
@@ -1372,6 +1381,20 @@ export class DiscordBot {
               .setDescription(
                 "Unblock image generation (if blocked due to cost limit)"
               )
+          )
+          // Kill command
+          .addSubcommand((subcommand) =>
+            subcommand
+              .setName("kill")
+              .setDescription(
+                "Kill the bot - stops listening to all messages except /sbb revive"
+              )
+          )
+          // Revive command
+          .addSubcommand((subcommand) =>
+            subcommand
+              .setName("revive")
+              .setDescription("Revive the bot - restarts normal operation")
           ),
       ].map((command) => command.toJSON());
 
@@ -1419,6 +1442,16 @@ export class DiscordBot {
 
       const subcommand = interaction.options.getSubcommand();
 
+      // Allow revive command even when killed, block all other commands
+      if (this.killed && subcommand !== "revive") {
+        await interaction.reply({
+          content:
+            "⚠️ Bot is currently killed. Use `/sbb revive` to restart the bot.",
+          flags: MessageFlags.Ephemeral,
+        });
+        return;
+      }
+
       switch (subcommand) {
         case "start":
           await this.handleStartCommand(interaction);
@@ -1458,6 +1491,12 @@ export class DiscordBot {
           break;
         case "unblock-image":
           await this.handleUnblockImageCommand(interaction);
+          break;
+        case "kill":
+          await this.handleKillCommand(interaction);
+          break;
+        case "revive":
+          await this.handleReviveCommand(interaction);
           break;
         default:
           await interaction.reply({
@@ -2309,6 +2348,74 @@ export class DiscordBot {
         content: `Failed to unblock image generation: ${
           error instanceof Error ? error.message : "Unknown error"
         }`,
+      });
+    }
+  }
+
+  /**
+   * Handle /sbb kill command - Kills the bot, stops listening to all messages
+   */
+  private async handleKillCommand(
+    interaction: ChatInputCommandInteraction
+  ): Promise<void> {
+    try {
+      if (this.killed) {
+        await interaction.reply({
+          content: "⚠️ Bot is already killed.",
+          flags: MessageFlags.Ephemeral,
+        });
+        return;
+      }
+
+      this.killed = true;
+      logger.warn(
+        `Bot killed by ${interaction.user.tag} (${interaction.user.id})`
+      );
+
+      await interaction.reply({
+        content:
+          "💀 **Bot Killed**\n\nThe bot has been stopped and will ignore all messages.\n\nUse `/sbb revive` to restart the bot.",
+        flags: MessageFlags.Ephemeral,
+      });
+    } catch (error) {
+      logger.error("Error handling kill command:", error);
+      await interaction.reply({
+        content: "Failed to kill bot.",
+        flags: MessageFlags.Ephemeral,
+      });
+    }
+  }
+
+  /**
+   * Handle /sbb revive command - Revives the bot, restarts normal operation
+   */
+  private async handleReviveCommand(
+    interaction: ChatInputCommandInteraction
+  ): Promise<void> {
+    try {
+      if (!this.killed) {
+        await interaction.reply({
+          content: "✅ Bot is already running normally.",
+          flags: MessageFlags.Ephemeral,
+        });
+        return;
+      }
+
+      this.killed = false;
+      logger.info(
+        `Bot revived by ${interaction.user.tag} (${interaction.user.id})`
+      );
+
+      await interaction.reply({
+        content:
+          "✅ **Bot Revived**\n\nThe bot has been restarted and is now listening to messages again.",
+        flags: MessageFlags.Ephemeral,
+      });
+    } catch (error) {
+      logger.error("Error handling revive command:", error);
+      await interaction.reply({
+        content: "Failed to revive bot.",
+        flags: MessageFlags.Ephemeral,
       });
     }
   }

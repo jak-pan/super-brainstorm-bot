@@ -71,37 +71,8 @@ export class NotionService {
    * Returns the database ID
    */
   private async ensureDatabase(): Promise<string> {
-    // If we already have a database ID, verify it still exists and has Name property
-    if (this.databaseId) {
-      try {
-        // Verify it still exists and has the correct schema
-        const database = await this.client.databases.retrieve({
-          database_id: this.databaseId,
-        });
-        // Check if it has a Name property (title property)
-        if (
-          "properties" in database &&
-          database.properties &&
-          typeof database.properties === "object" &&
-          "Name" in database.properties
-        ) {
-          return this.databaseId;
-        }
-        // Database exists but doesn't have Name property, reset and find/create new one
-        logger.warn(
-          `Database ${this.databaseId} exists but doesn't have Name property, creating new one`
-        );
-        this.databaseId = null;
-      } catch (error) {
-        // Database was deleted, reset and create new one
-        logger.warn(
-          `Database ${this.databaseId} no longer exists, creating new one`
-        );
-        this.databaseId = null;
-      }
-    }
-
-    // Try to find existing database in the page
+    // Always check for existing database first (don't rely on cached ID)
+    // This ensures we reuse the database even if the service instance is recreated
     try {
       // Check if page has child databases
       const children = await this.client.blocks.children.list({
@@ -130,11 +101,45 @@ export class NotionService {
             }
           } catch (error) {
             // Database doesn't exist or can't be accessed, continue
+            logger.warn(
+              `Failed to retrieve database ${block.id}, continuing search:`,
+              error
+            );
           }
         }
       }
     } catch (error) {
       logger.warn("Failed to check for existing database:", error);
+    }
+
+    // If we have a cached database ID, verify it still exists
+    if (this.databaseId) {
+      try {
+        const database = await this.client.databases.retrieve({
+          database_id: this.databaseId,
+        });
+        // Check if it has a Name property
+        if (
+          "properties" in database &&
+          database.properties &&
+          typeof database.properties === "object" &&
+          "Name" in database.properties
+        ) {
+          logger.info(`Using cached database: ${this.databaseId}`);
+          return this.databaseId;
+        }
+        // Database exists but doesn't have Name property, reset
+        logger.warn(
+          `Cached database ${this.databaseId} doesn't have Name property, will create new one`
+        );
+        this.databaseId = null;
+      } catch (error) {
+        // Database was deleted, reset
+        logger.warn(
+          `Cached database ${this.databaseId} no longer exists, will create new one`
+        );
+        this.databaseId = null;
+      }
     }
 
     // Create new database with proper schema
@@ -192,11 +197,12 @@ export class NotionService {
   ): Promise<void> {
     try {
       const timestamp = new Date().toISOString();
-      const topicName = conversation.topic || conversation.id;
+      // Use conversation ID as the database entry name (not topic)
+      const conversationId = conversation.id;
 
-      // Find or create database entry for this topic
+      // Find or create database entry for this conversation
       const entryId = await this.findOrCreateDatabaseEntry(
-        topicName,
+        conversationId,
         conversation
       );
 
@@ -226,7 +232,9 @@ export class NotionService {
         }
       );
 
-      logger.info(`Updated Notion reasoning document for topic: ${topicName}`);
+      logger.info(
+        `Updated Notion reasoning document for conversation: ${conversationId}`
+      );
     } catch (error) {
       logger.error("Failed to update Notion reasoning document:", error);
       throw error;
@@ -244,11 +252,12 @@ export class NotionService {
   ): Promise<void> {
     try {
       const timestamp = new Date().toISOString();
-      const topicName = conversation.topic || conversation.id;
+      // Use conversation ID as the database entry name (not topic)
+      const conversationId = conversation.id;
 
       // Find or create database entry
       const entryId = await this.findOrCreateDatabaseEntry(
-        topicName,
+        conversationId,
         conversation
       );
 
@@ -282,7 +291,7 @@ export class NotionService {
         }
       );
 
-      logger.info(`Updated Notion TLDR for topic: ${topicName}`);
+      logger.info(`Updated Notion TLDR for conversation: ${conversationId}`);
     } catch (error) {
       logger.error("Failed to update Notion TLDR document:", error);
       throw error;
@@ -409,20 +418,21 @@ export class NotionService {
   }
 
   /**
-   * Find or create a database entry for a topic
+   * Find or create a database entry for a conversation
+   * Uses conversation ID as the entry name
    * Returns the page ID of the entry
    */
   private async findOrCreateDatabaseEntry(
-    topicName: string,
+    conversationId: string,
     _conversation: ConversationState
   ): Promise<string> {
     try {
       // Ensure database exists
       const databaseId = await this.ensureDatabase();
 
-      // Search for existing entry with this topic name using search API
+      // Search for existing entry with this conversation ID using search API
       const searchResponse = await this.client.search({
-        query: topicName,
+        query: conversationId,
         filter: {
           property: "object",
           value: "page",
@@ -454,7 +464,7 @@ export class NotionService {
               "title" in nameProperty
             ) {
               const titleText = nameProperty.title[0]?.plain_text || "";
-              if (titleText === topicName) {
+              if (titleText === conversationId) {
                 return result.id;
               }
             }
@@ -472,7 +482,7 @@ export class NotionService {
             title: [
               {
                 text: {
-                  content: topicName,
+                  content: conversationId,
                 },
               },
             ],
@@ -495,9 +505,10 @@ export class NotionService {
     conversation: ConversationState
   ): Promise<string> {
     try {
-      const topicName = conversation.topic || conversation.id;
+      // Use conversation ID as the database entry name (not topic)
+      const conversationId = conversation.id;
       const entryId = await this.findOrCreateDatabaseEntry(
-        topicName,
+        conversationId,
         conversation
       );
       return await this.getExistingTLDR(entryId);
@@ -537,6 +548,268 @@ export class NotionService {
       logger.error("Failed to get existing TLDR:", error);
       return "";
     }
+  }
+
+  /**
+   * Parse markdown content and convert to Notion blocks
+   * Supports: headings, bold, italic, code blocks, lists, paragraphs
+   *
+   * @param markdown - Markdown content to parse
+   * @returns Array of Notion block objects
+   */
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  private parseMarkdownToNotionBlocks(markdown: string): any[] {
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const blocks: any[] = [];
+    const lines = markdown.split("\n");
+    let currentParagraph: string[] = [];
+    let inCodeBlock = false;
+    let codeBlockContent: string[] = [];
+    let codeBlockLanguage = "";
+
+    const flushParagraph = () => {
+      if (currentParagraph.length > 0) {
+        const text = currentParagraph.join("\n").trim();
+        if (text) {
+          const paragraphBlocks = this.createParagraphBlock(text);
+          blocks.push(...paragraphBlocks);
+        }
+        currentParagraph = [];
+      }
+    };
+
+    const flushCodeBlock = () => {
+      if (codeBlockContent.length > 0) {
+        const code = codeBlockContent.join("\n");
+        blocks.push({
+          object: "block",
+          type: "code",
+          code: {
+            rich_text: [
+              {
+                type: "text",
+                text: {
+                  content: code,
+                },
+              },
+            ],
+            language: codeBlockLanguage || "plain text",
+          },
+        });
+        codeBlockContent = [];
+        codeBlockLanguage = "";
+      }
+    };
+
+    for (let i = 0; i < lines.length; i++) {
+      const line = lines[i];
+
+      // Check for code blocks
+      if (line.startsWith("```")) {
+        if (inCodeBlock) {
+          flushCodeBlock();
+          inCodeBlock = false;
+        } else {
+          flushParagraph();
+          inCodeBlock = true;
+          codeBlockLanguage = line.substring(3).trim() || "plain text";
+        }
+        continue;
+      }
+
+      if (inCodeBlock) {
+        codeBlockContent.push(line);
+        continue;
+      }
+
+      // Check for headings
+      if (line.startsWith("### ")) {
+        flushParagraph();
+        blocks.push({
+          object: "block",
+          type: "heading_3",
+          heading_3: {
+            rich_text: [
+              {
+                type: "text",
+                text: {
+                  content: line.substring(4).trim(),
+                },
+              },
+            ],
+          },
+        });
+        continue;
+      }
+
+      if (line.startsWith("## ")) {
+        flushParagraph();
+        blocks.push({
+          object: "block",
+          type: "heading_2",
+          heading_2: {
+            rich_text: [
+              {
+                type: "text",
+                text: {
+                  content: line.substring(3).trim(),
+                },
+              },
+            ],
+          },
+        });
+        continue;
+      }
+
+      if (line.startsWith("# ")) {
+        flushParagraph();
+        blocks.push({
+          object: "block",
+          type: "heading_1",
+          heading_1: {
+            rich_text: [
+              {
+                type: "text",
+                text: {
+                  content: line.substring(2).trim(),
+                },
+              },
+            ],
+          },
+        });
+        continue;
+      }
+
+      // Check for horizontal rule
+      if (line.trim() === "---" || line.trim() === "***") {
+        flushParagraph();
+        blocks.push({
+          object: "block",
+          type: "divider",
+          divider: {},
+        });
+        continue;
+      }
+
+      // Regular line - add to current paragraph
+      if (line.trim() === "") {
+        flushParagraph();
+      } else {
+        currentParagraph.push(line);
+      }
+    }
+
+    flushParagraph();
+    flushCodeBlock();
+
+    return blocks;
+  }
+
+  /**
+   * Create paragraph block(s) with rich text formatting (bold, italic)
+   * Splits into multiple blocks if content exceeds 2000 characters
+   *
+   * @param text - Text content with markdown formatting
+   * @returns Array of Notion paragraph blocks
+   */
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  private createParagraphBlock(text: string): any[] {
+    const MAX_TEXT_LENGTH = 2000;
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const blocks: any[] = [];
+
+    // If text is short enough, process normally
+    if (text.length <= MAX_TEXT_LENGTH) {
+      return [this.parseRichText(text)];
+    }
+
+    // Split long text into chunks, trying to break at word boundaries
+    const chunks = this.splitContentIntoChunks(text, MAX_TEXT_LENGTH - 10);
+    for (const chunk of chunks) {
+      blocks.push(this.parseRichText(chunk));
+    }
+
+    return blocks;
+  }
+
+  /**
+   * Parse text with markdown formatting into Notion rich text array
+   *
+   * @param text - Text content with markdown formatting
+   * @returns Notion paragraph block
+   */
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  private parseRichText(text: string): any {
+    // Parse bold (**text**) and italic (*text*)
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const richText: any[] = [];
+    let currentIndex = 0;
+    const textLength = text.length;
+
+    while (currentIndex < textLength) {
+      // Check for bold (**text**)
+      const boldMatch = text.substring(currentIndex).match(/^\*\*(.+?)\*\*/);
+      if (boldMatch) {
+        richText.push({
+          type: "text",
+          text: {
+            content: boldMatch[1],
+          },
+          annotations: {
+            bold: true,
+            italic: false,
+          },
+        });
+        currentIndex += boldMatch[0].length;
+        continue;
+      }
+
+      // Check for italic (*text*)
+      const italicMatch = text.substring(currentIndex).match(/^\*(.+?)\*/);
+      if (italicMatch) {
+        richText.push({
+          type: "text",
+          text: {
+            content: italicMatch[1],
+          },
+          annotations: {
+            bold: false,
+            italic: true,
+          },
+        });
+        currentIndex += italicMatch[0].length;
+        continue;
+      }
+
+      // Regular text - find next formatting or end
+      let nextFormat = textLength;
+      const nextBold = text.indexOf("**", currentIndex);
+      const nextItalic = text.indexOf("*", currentIndex);
+      if (nextBold !== -1 && nextBold < nextFormat) nextFormat = nextBold;
+      if (nextItalic !== -1 && nextItalic < nextFormat) nextFormat = nextItalic;
+
+      const plainText = text.substring(currentIndex, nextFormat);
+      if (plainText) {
+        richText.push({
+          type: "text",
+          text: {
+            content: plainText,
+          },
+        });
+      }
+      currentIndex = nextFormat;
+    }
+
+    return {
+      object: "block",
+      type: "paragraph",
+      paragraph: {
+        rich_text:
+          richText.length > 0
+            ? richText
+            : [{ type: "text", text: { content: text } }],
+      },
+    };
   }
 
   /**
@@ -582,44 +855,36 @@ export class NotionService {
   }
 
   /**
-   * Append content to a Notion page, splitting into multiple blocks if needed
-   * to respect Notion's 2000 character limit per paragraph
+   * Append content to a Notion page, parsing markdown and creating proper blocks
+   * Handles headings, bold, italic, code blocks, and paragraphs
    *
    * @param blockId - The Notion block/page ID to append to
-   * @param content - The content to append
+   * @param content - The markdown content to append
    */
   private async appendContentToPage(
     blockId: string,
     content: string
   ): Promise<void> {
-    const chunks = this.splitContentIntoChunks(content);
+    // Parse markdown into Notion blocks
+    const blocks = this.parseMarkdownToNotionBlocks(content);
 
     logger.info(
-      `Appending content to page ${blockId} (${content.length} chars, split into ${chunks.length} chunks)`
+      `Appending content to page ${blockId} (${content.length} chars, parsed into ${blocks.length} blocks)`
     );
 
-    // Append chunks sequentially to respect rate limits
-    for (let i = 0; i < chunks.length; i++) {
+    if (blocks.length === 0) {
+      return;
+    }
+
+    // Notion API allows appending up to 100 blocks at once
+    const batchSize = 100;
+    for (let i = 0; i < blocks.length; i += batchSize) {
+      const batch = blocks.slice(i, i + batchSize);
       await retryWithBackoff(
         () =>
           this.client.blocks.children.append({
             block_id: blockId,
-            children: [
-              {
-                object: "block",
-                type: "paragraph",
-                paragraph: {
-                  rich_text: [
-                    {
-                      type: "text",
-                      text: {
-                        content: chunks[i],
-                      },
-                    },
-                  ],
-                },
-              },
-            ],
+            children: batch,
           }),
         {
           maxRetries: 3,
