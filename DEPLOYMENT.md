@@ -173,26 +173,17 @@ See `.env.example` for the complete list.
 
 ## Health Checks
 
-The Dockerfile includes a health check. If you need to expose a health endpoint, you can add a simple HTTP server to `src/index.ts`:
+The Dockerfile includes a health check that expects an HTTP server on port 3000. The application automatically starts a health check server when:
 
-```typescript
-import http from 'http';
+* `NODE_ENV=production` (default in Docker/cloud deployments), or
+* `ENABLE_HEALTH_CHECK=true` is explicitly set
 
-// Add after bot starts
-const healthServer = http.createServer((req, res) => {
-  if (req.url === '/health') {
-    res.writeHead(200);
-    res.end('OK');
-  } else {
-    res.writeHead(404);
-    res.end('Not Found');
-  }
-});
+The health check endpoint is available at `http://localhost:3000/health` and returns `200 OK` when the bot is running.
 
-healthServer.listen(3000, () => {
-  logger.info('Health check server listening on port 3000');
-});
-```
+**Optional environment variables:**
+
+* `HEALTH_CHECK_PORT` - Port for health check server (default: `3000`)
+* `ENABLE_HEALTH_CHECK` - Explicitly enable/disable health check server (default: enabled in production)
 
 ## Resource Requirements
 

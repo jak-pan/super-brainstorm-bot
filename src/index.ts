@@ -203,8 +203,13 @@ async function main() {
 
     logger.info("Super Brainstorm Bot is running!");
 
-    // Optional: Start health check server for Docker/cloud deployments
-    if (process.env.ENABLE_HEALTH_CHECK === "true") {
+    // Start health check server for Docker/cloud deployments
+    // Always enabled in production, or when ENABLE_HEALTH_CHECK is explicitly set
+    const shouldEnableHealthCheck =
+      process.env.NODE_ENV === "production" ||
+      process.env.ENABLE_HEALTH_CHECK === "true";
+
+    if (shouldEnableHealthCheck) {
       const http = await import("http");
       const healthServer = http.default.createServer((req, res) => {
         if (req.url === "/health") {
@@ -219,6 +224,17 @@ async function main() {
       const port = parseInt(process.env.HEALTH_CHECK_PORT || "3000", 10);
       healthServer.listen(port, () => {
         logger.info(`Health check server listening on port ${port}`);
+      });
+
+      // Handle server errors gracefully
+      healthServer.on("error", (error: NodeJS.ErrnoException) => {
+        if (error.code === "EADDRINUSE") {
+          logger.warn(
+            `Port ${port} is already in use, health check server not started`
+          );
+        } else {
+          logger.error("Health check server error:", error);
+        }
       });
     }
   } catch (error) {
