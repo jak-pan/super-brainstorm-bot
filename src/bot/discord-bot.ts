@@ -279,29 +279,51 @@ export class DiscordBot {
             this.client.user!.id
           );
           const permissions = channel.permissionsFor(botMember!);
-
+          
+          logger.info(
+            `Checking permissions for thread creation in channel ${channelId}`
+          );
+          
           // Check for Send Messages permission (needed to send starter message)
-          if (!permissions?.has("SendMessages")) {
+          const hasSendMessages = permissions?.has("SendMessages");
+          logger.info(
+            `Send Messages permission: ${hasSendMessages ? "✅ Granted" : "❌ Missing"}`
+          );
+          
+          if (!hasSendMessages) {
             throw new Error(
               "Bot does not have permission to send messages in this channel. Please grant 'Send Messages' permission."
             );
           }
-
+          
           // Check for Create Public Threads permission
-          if (!permissions?.has("CreatePublicThreads")) {
+          const hasCreateThreads = permissions?.has("CreatePublicThreads");
+          logger.info(
+            `Create Public Threads permission: ${hasCreateThreads ? "✅ Granted" : "❌ Missing"}`
+          );
+          
+          if (!hasCreateThreads) {
             throw new Error(
               "Bot does not have permission to create threads. Please grant 'Create Public Threads' permission."
             );
           }
+          
+          logger.info(
+            `✅ All required permissions granted. Proceeding with thread creation.`
+          );
 
           // Create thread with topic as name (truncate to 100 chars if needed)
           const threadName =
-            topic.length > 100 ? topic.substring(0, 97) + "..." : topic;
+            topic.length > 50 ? topic.substring(0, 97) + "..." : topic;
 
           // First, send a message in the channel, then create thread from it
+          logger.info(`Sending starter message in channel ${channelId}...`);
           const starterMessage = await channel.send({
             content: topic,
           });
+          logger.info(
+            `✅ Starter message sent (ID: ${starterMessage.id}). Creating thread...`
+          );
 
           // Create thread from the message
           const newThread = await starterMessage.startThread({
@@ -309,6 +331,9 @@ export class DiscordBot {
             autoArchiveDuration: 1440, // 24 hours
             reason: "Super Brainstorm Bot conversation",
           });
+          logger.info(
+            `✅ Thread created successfully (ID: ${newThread.id}, Name: ${threadName})`
+          );
 
           // Use the new thread for the conversation
           thread = newThread;
