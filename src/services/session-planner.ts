@@ -159,7 +159,8 @@ export class SessionPlanner {
           .join("\n");
         await this.messageCallback(
           `**Session Planner** 🤔\n\nI'd like to clarify a few things before we start:\n\n${questionsText}\n\nPlease reply with your answers, or use \`/sbb start\` to proceed with defaults. Use \`/sbb edit\` to modify your initial message.`,
-          initialMessage.discordMessageId
+          initialMessage.discordMessageId,
+          conversationId
         );
         // Return questions state - plan will be created after user responds
         return { type: "questions", questions };
@@ -315,7 +316,7 @@ export class SessionPlanner {
       // Post plan for approval
       if (this.messageCallback) {
         const planText = `**Session Plan** 📋\n\n**Topic:** ${planData.expandedTopic}\n\n**Plan:**\n${planData.plan}\n\n**Parameters:**\n- Max Messages: ${planData.parameters.maxMessages}\n- Cost Limit: $${planData.parameters.costLimit}\n- Timeout: ${planData.parameters.timeoutMinutes} minutes\n- Context Window: ${planData.parameters.maxContextWindowPercent}%\n\nType \`/sbb start\` to begin the conversation, or \`/sbb edit\` to modify the plan.`;
-        await this.messageCallback(planText);
+        await this.messageCallback(planText, undefined, conversationId);
       }
 
       return {
@@ -384,7 +385,9 @@ export class SessionPlanner {
 
     if (this.messageCallback) {
       await this.messageCallback(
-        "**Session Started** ✅\n\nThe conversation has begun! All participants can now engage."
+        "**Session Started** ✅\n\nThe conversation has begun! All participants can now engage.",
+        undefined,
+        conversationId
       );
     }
 
@@ -484,7 +487,8 @@ export class SessionPlanner {
             }`;
             await this.messageCallback(
               redirectMessage,
-              newMessage.discordMessageId
+              newMessage.discordMessageId,
+              conversationId
             );
           }
         } else {
@@ -516,7 +520,9 @@ export class SessionPlanner {
 
     if (this.messageCallback) {
       await this.messageCallback(
-        `**Session Moderator** ⏹️\n\nConversation stopped: ${reason}\n\nThank you for participating!`
+        `**Session Moderator** ⏹️\n\nConversation stopped: ${reason}\n\nThank you for participating!`,
+        undefined,
+        conversationId
       );
     }
 
@@ -573,7 +579,9 @@ export class SessionPlanner {
 
     if (this.messageCallback) {
       await this.messageCallback(
-        `**Session Moderator** ⚠️\n\nThe conversation has drifted significantly from the original topic. Consider refocusing or concluding this session.`
+        `**Session Moderator** ⚠️\n\nThe conversation has drifted significantly from the original topic. Consider refocusing or concluding this session.`,
+        undefined,
+        conversationId
       );
     }
   }
@@ -613,7 +621,9 @@ export class SessionPlanner {
 
     if (this.messageCallback) {
       this.messageCallback(
-        `**Session Planner** ⏱️\n\nPlanning phase timed out. Please start a new conversation.`
+        `**Session Planner** ⏱️\n\nPlanning phase timed out. Please start a new conversation.`,
+        undefined,
+        conversationId
       ).catch((error) => {
         logger.error("Error sending timeout message:", error);
       });
@@ -641,7 +651,9 @@ export class SessionPlanner {
 
     if (this.messageCallback) {
       await this.messageCallback(
-        `**Session Plan** 📋\n\nUsing default parameters. Use \`/sbb start\` to begin, or \`/sbb edit\` to modify the plan.`
+        `**Session Plan** 📋\n\nUsing default parameters. Use \`/sbb start\` to begin, or \`/sbb edit\` to modify the plan.`,
+        undefined,
+        conversationId
       );
     }
   }
