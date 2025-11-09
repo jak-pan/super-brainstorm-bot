@@ -90,12 +90,12 @@ export class DiscordBot {
 
   /**
    * Set up Discord event handlers
-   * - ready: Bot connection confirmation
+   * - clientReady: Bot connection confirmation (renamed from 'ready' in Discord.js v15)
    * - messageCreate: Handle incoming messages
    * - error: Handle Discord client errors
    */
   private setupEventHandlers(): void {
-    this.client.once("ready", async () => {
+    this.client.once("clientReady", async () => {
       logger.info(`Discord bot logged in as ${this.client.user?.tag}`);
       await this.registerSlashCommands();
     });
@@ -107,8 +107,7 @@ export class DiscordBot {
       }
 
       // Process messages in any channel or thread in the server
-      const isInServer =
-        message.guild?.id === this.config.discord.guildId;
+      const isInServer = message.guild?.id === this.config.discord.guildId;
 
       if (!isInServer) {
         return;
@@ -1020,8 +1019,7 @@ export class DiscordBot {
     interaction: ChatInputCommandInteraction
   ): Promise<void> {
     // Allow commands in any channel or thread in the server
-    const isInServer =
-      interaction.guild?.id === this.config.discord.guildId;
+    const isInServer = interaction.guild?.id === this.config.discord.guildId;
 
     if (!isInServer) {
       await interaction.reply({
