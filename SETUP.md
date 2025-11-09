@@ -10,9 +10,11 @@ This guide will walk you through setting up and running the Super Brainstorm Bot
 * OpenRouter API Key (provides access to 300+ AI models)
 * Notion API Key and Database/Page ID
 
-## Step 1: Install Dependencies
+## Step 1: Clone and Install Dependencies
 
 ```bash
+git clone <repository-url>
+cd superbrainstormbot
 npm install
 ```
 
