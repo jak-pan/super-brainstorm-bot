@@ -231,33 +231,34 @@ export class NotionService {
     _conversation: ConversationState
   ): Promise<string> {
     try {
-      // Query database for existing entry with this topic name
-      // Note: databases.query is available but may not be in TypeScript types
-      const response = await (this.client.databases as unknown as {
-        query: (args: {
-          database_id: string;
-          filter: {
-            property: string;
-            title: { equals: string };
-          };
-        }) => Promise<{ results: NotionPage[] }>;
-      }).query({
-        database_id: this.databaseId,
+      // Search for existing entry with this topic name using search API
+      const searchResponse = await this.client.search({
+        query: topicName,
         filter: {
-          property: "Topic",
-          title: {
-            equals: topicName,
-          },
+          property: "object",
+          value: "page",
+        },
+        sort: {
+          direction: "descending",
+          timestamp: "last_edited_time",
         },
       });
 
-      if (response.results.length > 0) {
-        const firstResult = response.results[0];
-        if (isPageObjectResponse(firstResult)) {
-          return firstResult.id;
+      // Filter results to find pages in our database with matching topic
+      for (const result of searchResponse.results) {
+        if (isPageObjectResponse(result)) {
+          // Check if this page belongs to our database
+          if (result.parent.type === "database_id" && result.parent.database_id === this.databaseId) {
+            // Check if the topic property matches
+            const topicProperty = result.properties["Topic"];
+            if (topicProperty && topicProperty.type === "title") {
+              const titleText = topicProperty.title[0]?.plain_text || "";
+              if (titleText === topicName) {
+                return result.id;
+              }
+            }
+          }
         }
-        // Fallback for partial page response
-        return "id" in firstResult ? firstResult.id : "";
       }
 
       // Create new entry
@@ -486,32 +487,34 @@ export class NotionService {
    */
   private async findConversationEntry(conversationId: string): Promise<{ id: string } | null> {
     try {
-      // Note: databases.query is available but may not be in TypeScript types
-      const response = await (this.client.databases as unknown as {
-        query: (args: {
-          database_id: string;
-          filter: {
-            property: string;
-            title: { contains: string };
-          };
-        }) => Promise<{ results: NotionPage[] }>;
-      }).query({
-        database_id: this.databaseId,
+      // Search for existing entry using search API
+      const searchResponse = await this.client.search({
+        query: conversationId,
         filter: {
-          property: "Topic",
-          title: {
-            contains: conversationId,
-          },
+          property: "object",
+          value: "page",
+        },
+        sort: {
+          direction: "descending",
+          timestamp: "last_edited_time",
         },
       });
 
-      if (response.results.length > 0) {
-        const firstResult = response.results[0];
-        if (isPageObjectResponse(firstResult)) {
-          return { id: firstResult.id };
+      // Filter results to find pages in our database
+      for (const result of searchResponse.results) {
+        if (isPageObjectResponse(result)) {
+          // Check if this page belongs to our database
+          if (result.parent.type === "database_id" && result.parent.database_id === this.databaseId) {
+            // Check if the topic property contains the conversation ID
+            const topicProperty = result.properties["Topic"];
+            if (topicProperty && topicProperty.type === "title") {
+              const titleText = topicProperty.title[0]?.plain_text || "";
+              if (titleText.includes(conversationId)) {
+                return { id: result.id };
+              }
+            }
+          }
         }
-        // Fallback for partial page response
-        return "id" in firstResult ? { id: firstResult.id } : null;
       }
 
       return null;
