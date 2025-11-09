@@ -208,7 +208,7 @@ export class DiscordBot {
           appMessage
         );
 
-        // Trigger scribe update (async, non-blocking)
+      // Trigger scribe update (async, non-blocking)
         this.scribeBot.notifyNewMessages(conversation).catch((error) => {
           logger.error("Scribe bot error:", error);
         });
@@ -236,18 +236,21 @@ export class DiscordBot {
     await interaction.deferReply();
 
     try {
-      if (!interaction.channel) {
+      // Get channel - can be TextChannel, ThreadChannel, or null
+      const channel = interaction.channel;
+      if (!channel) {
         await interaction.editReply({
           content: "Error: No channel found for this interaction.",
         });
         return;
       }
 
-      const isInThread = interaction.channel.isThread();
+      // Check if channel is a thread (ThreadChannel extends TextChannel)
+      const isInThread = channel.isThread();
       let thread: ThreadChannel | undefined = isInThread
-        ? (interaction.channel as ThreadChannel)
+        ? (channel as ThreadChannel)
         : undefined;
-      const channelId = interaction.channel.id;
+      const channelId = channel.id;
       const topicOption = interaction.options.getString("topic");
 
       // Topic is required if not in thread
@@ -265,7 +268,7 @@ export class DiscordBot {
         "General Discussion";
 
       // If starting in a channel (not a thread), create a thread
-      if (!isInThread && interaction.channel instanceof TextChannel) {
+      if (!isInThread && channel instanceof TextChannel) {
         await interaction.editReply({
           content: `📝 Creating thread and starting conversation...`,
         });
@@ -275,7 +278,7 @@ export class DiscordBot {
           const botMember = await interaction.guild?.members.fetch(
             this.client.user!.id
           );
-          const permissions = interaction.channel.permissionsFor(botMember!);
+          const permissions = channel.permissionsFor(botMember!);
           if (!permissions?.has("CreatePublicThreads")) {
             throw new Error(
               "Bot does not have permission to create threads. Please grant 'Create Public Threads' permission."
@@ -285,15 +288,17 @@ export class DiscordBot {
           // Create thread with topic as name (truncate to 100 chars if needed)
           const threadName =
             topic.length > 100 ? topic.substring(0, 97) + "..." : topic;
-          const newThread = await interaction.channel.threads.create({
+          
+          // First, send a message in the channel, then create thread from it
+          const starterMessage = await channel.send({
+            content: topic,
+          });
+
+          // Create thread from the message
+          const newThread = await starterMessage.startThread({
             name: threadName,
             autoArchiveDuration: 1440, // 24 hours
             reason: "Super Brainstorm Bot conversation",
-          });
-
-          // Post the topic as the first message in the thread
-          await newThread.send({
-            content: topic,
           });
 
           // Use the new thread for the conversation
@@ -310,7 +315,7 @@ export class DiscordBot {
               error instanceof Error ? error.message : "Unknown error"
             }`,
           });
-          return;
+      return;
         }
       }
 
@@ -354,8 +359,8 @@ export class DiscordBot {
         await interaction.editReply({
           content: `✅ Conversation started! All participants can now engage.`,
         });
-        return;
-      }
+      return;
+    }
 
       // If conversation exists but no plan, or no conversation exists
       // Create/get conversation and create plan, then auto-start
@@ -380,8 +385,8 @@ export class DiscordBot {
           await interaction.editReply({
             content: "Error: Failed to create conversation.",
           });
-          return;
-        }
+      return;
+    }
 
         // If thread was just created, add the first message (topic) to the conversation
         if (thread && !isInThread) {
@@ -457,8 +462,8 @@ export class DiscordBot {
         await interaction.editReply({
           content: `✅ Planning started${threadLink}. Session Planner has asked clarifying questions. Please respond, then use \`/sbb start\` to begin the conversation.`,
         });
-        return;
-      }
+      return;
+    }
 
       // Plan was created, auto-start
       if (planningResult.type === "plan") {
@@ -542,14 +547,14 @@ export class DiscordBot {
         topic,
         thread
       );
-      const conversation = this.contextManager.getConversation(conversationId);
+    const conversation = this.contextManager.getConversation(conversationId);
 
-      if (!conversation) {
+    if (!conversation) {
         await interaction.editReply({
           content: "Error: Failed to create conversation.",
         });
-        return;
-      }
+      return;
+    }
 
       // If in thread, fetch and add previous messages (but don't compile yet)
       let previousMessagesCount = 0;
@@ -637,13 +642,13 @@ export class DiscordBot {
       const lookupId = thread ? thread.id : interaction.channel!.id;
 
       const conversationId = this.activeConversations.get(lookupId);
-      if (!conversationId) {
+    if (!conversationId) {
         await interaction.editReply({
           content:
             "No active conversation found. Use `/sbb start` to start a new conversation.",
         });
-        return;
-      }
+      return;
+    }
 
       const conversation = this.contextManager.getConversation(conversationId);
       if (!conversation) {
@@ -827,24 +832,24 @@ export class DiscordBot {
 
         let replyToMessage: Message | null = null;
 
-        if (response.replyTo.length > 0) {
-          // Get the first message to reply to (Discord only supports one reference)
-          const replyToId = response.replyTo[0];
+      if (response.replyTo.length > 0) {
+        // Get the first message to reply to (Discord only supports one reference)
+        const replyToId = response.replyTo[0];
           replyToMessage = await channel.messages
             .fetch(replyToId)
             .catch(() => null);
-        }
+      }
 
-        const content = `**[${response.model}]**\n\n${response.content}`;
+      const content = `**[${response.model}]**\n\n${response.content}`;
 
-        const sentMessage = await channel.send({
-          content,
+      const sentMessage = await channel.send({
+        content,
           reply: replyToMessage
             ? { messageReference: replyToMessage }
             : undefined,
-        });
+      });
 
-        return sentMessage;
+      return sentMessage;
       },
       {
         maxRetries: 3,
