@@ -54,75 +54,11 @@ See [ARCHITECTURE.md](./ARCHITECTURE.md) for detailed architecture documentation
 
 ## Setup
 
-### 1. Clone and Install
+See [SETUP.md](./SETUP.md) for detailed setup instructions.
 
-```bash
-git clone <repository-url>
-cd superbrainstormbot
-npm install
-```
+## Implementation Status
 
-### 2. Configure Environment Variables
-
-Create a `.env` file in the root directory:
-
-```bash
-# Discord
-DISCORD_BOT_TOKEN=your_discord_bot_token_here
-DISCORD_GUILD_ID=your_guild_id_here
-DISCORD_CHANNEL_ID=your_channel_id_here
-
-# OpenRouter (required - provides access to all AI models)
-OPENROUTER_API_KEY=your_openrouter_api_key_here
-# Get your API key from: https://openrouter.ai/keys
-
-# Notion (required)
-# Single database/page ID that hosts all topics as entries
-# Each entry contains: Topic name, TLDR content
-# Each entry has a subpage: "Reasoning & Transcript" with detailed reasoning
-NOTION_API_KEY=your_notion_api_key_here
-NOTION_PAGE_ID=your_notion_database_page_id_here
-
-# Logging (optional)
-LOG_LEVEL=info
-```
-
-### 3. Discord Bot Setup
-
-1. Go to [Discord Developer Portal](https://discord.com/developers/applications)
-2. Create a new application
-3. Go to "Bot" section and create a bot
-4. Copy the bot token
-5. Enable "Message Content Intent" in the bot settings
-6. Invite the bot to your server with appropriate permissions:
-   * Read Messages
-   * Send Messages
-   * Read Message History
-
-### 4. Notion Setup
-
-1. Go to [Notion Integrations](https://www.notion.so/my-integrations)
-2. Create a new integration
-3. Copy the API key
-4. Create a database or page in Notion (this will host all conversation topics)
-5. Share the database/page with your integration (click "..." → "Add connections")
-6. Copy the page/database ID from the URL (the part after the last `/`)
-7. The bot will automatically create entries for each conversation topic with:
-   * Topic name and TLDR summaries in the main entry
-   * Detailed reasoning and transcripts in a "Reasoning & Transcript" subpage
-
-### 5. Build and Run
-
-```bash
-# Build TypeScript
-npm run build
-
-# Run the bot
-npm start
-
-# Or run in development mode with auto-reload
-npm run dev
-```
+See [STATUS.md](./STATUS.md) for current implementation progress and feature status.
 
 ## Usage
 
