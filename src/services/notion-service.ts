@@ -246,7 +246,8 @@ export class NotionService {
 
       // Filter results to find pages in our database with matching topic
       for (const result of searchResponse.results) {
-        if (isPageObjectResponse(result)) {
+        // Type guard: only process page objects
+        if ("object" in result && result.object === "page" && isPageObjectResponse(result)) {
           // Check if this page belongs to our database
           if (result.parent.type === "database_id" && result.parent.database_id === this.databaseId) {
             // Check if the topic property matches
@@ -502,7 +503,8 @@ export class NotionService {
 
       // Filter results to find pages in our database
       for (const result of searchResponse.results) {
-        if (isPageObjectResponse(result)) {
+        // Type guard: only process page objects
+        if ("object" in result && result.object === "page" && isPageObjectResponse(result)) {
           // Check if this page belongs to our database
           if (result.parent.type === "database_id" && result.parent.database_id === this.databaseId) {
             // Check if the topic property contains the conversation ID

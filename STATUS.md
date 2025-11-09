@@ -416,6 +416,7 @@ This document tracks the implementation progress of the Super Brainstorm Bot sys
   * Content formatting for Notion blocks
   * Error handling and retries
   * Single database/page structure with subpages for detailed content
+  * **Bug Fix (2025-11-09)**: Fixed Notion API compatibility - replaced `databases.query` (not available in v5.3.0) with `client.search()` API. Added proper type guards to filter search results to only page objects.
 
 ***
 
