@@ -58,7 +58,7 @@ See [SETUP.md](./SETUP.md) for detailed setup instructions.
 
 ## Deployment
 
-See [DEPLOYMENT.md](./DEPLOYMENT.md) for deployment guides to DigitalOcean, AWS EC2, and other cloud services.
+See [DEPLOYMENT.md](./DEPLOYMENT.md) for Docker deployment instructions and cloud platform guides.
 
 ## Implementation Status
 
