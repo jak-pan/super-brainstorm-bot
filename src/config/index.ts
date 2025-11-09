@@ -42,12 +42,15 @@ export function loadConfig(): Config {
       databaseId: process.env.NOTION_PAGE_ID!, // Single database/page ID
     },
     limits: {
-      maxMessagesPerConversation: defaultSettings.limits.maxMessagesPerConversation,
+      maxMessagesPerConversation:
+        defaultSettings.limits.maxMessagesPerConversation,
       maxContextWindowPercent: defaultSettings.limits.maxContextWindowPercent,
       contextRefreshThreshold: defaultSettings.limits.contextRefreshThreshold,
-      conversationTimeoutMinutes: defaultSettings.limits.conversationTimeoutMinutes,
+      conversationTimeoutMinutes:
+        defaultSettings.limits.conversationTimeoutMinutes,
       maxAIResponsesPerTurn: defaultSettings.limits.maxAIResponsesPerTurn,
-      batchReplyTimeWindowSeconds: defaultSettings.limits.batchReplyTimeWindowSeconds,
+      batchReplyTimeWindowSeconds:
+        defaultSettings.limits.batchReplyTimeWindowSeconds,
     },
     costLimits: {
       conversation: defaultSettings.costLimits.conversation,
@@ -68,7 +71,8 @@ export function loadConfig(): Config {
       checkInterval: defaultSettings.moderator.checkInterval,
       topicDriftThreshold: defaultSettings.moderator.topicDriftThreshold,
       maxDriftWarnings: defaultSettings.moderator.maxDriftWarnings,
-      participantBalanceCheck: defaultSettings.moderator.participantBalanceCheck,
+      participantBalanceCheck:
+        defaultSettings.moderator.participantBalanceCheck,
       qualityAssessment: defaultSettings.moderator.qualityAssessment,
     },
     logLevel: defaultSettings.logging.level,

@@ -237,7 +237,7 @@ export class DiscordBot {
 
     try {
       const isInThread = interaction.channel?.isThread();
-      const thread = isInThread
+      let thread: ThreadChannel | undefined = isInThread
         ? (interaction.channel as ThreadChannel)
         : undefined;
       const channelId = interaction.channel!.id;
@@ -252,10 +252,48 @@ export class DiscordBot {
         return;
       }
 
-      const topic =
+      let topic =
         topicOption ||
         (thread ? thread.name : undefined) ||
         "General Discussion";
+
+      // If starting in a channel (not a thread), create a thread
+      if (!isInThread && interaction.channel instanceof TextChannel) {
+        await interaction.editReply({
+          content: `📝 Creating thread and starting conversation...`,
+        });
+
+        try {
+          // Create thread with topic as name (truncate to 100 chars if needed)
+          const threadName = topic.length > 100 ? topic.substring(0, 97) + "..." : topic;
+          const newThread = await interaction.channel.threads.create({
+            name: threadName,
+            autoArchiveDuration: 1440, // 24 hours
+            reason: "Super Brainstorm Bot conversation",
+          });
+
+          // Post the topic as the first message in the thread
+          await newThread.send({
+            content: topic,
+          });
+
+          // Use the new thread for the conversation
+          thread = newThread;
+
+          // Update the interaction reply to point to the thread
+          await interaction.editReply({
+            content: `✅ Thread created! Starting conversation in <#${newThread.id}>...`,
+          });
+        } catch (error) {
+          logger.error("Error creating thread:", error);
+          await interaction.editReply({
+            content: `Failed to create thread: ${
+              error instanceof Error ? error.message : "Unknown error"
+            }`,
+          });
+          return;
+        }
+      }
 
       const lookupId = thread ? thread.id : channelId;
       const existingConversationId = this.activeConversations.get(lookupId);
@@ -298,7 +336,9 @@ export class DiscordBot {
       // Create/get conversation and create plan, then auto-start
       let conversationId: string;
       if (!conversation) {
-        conversationId = this.getOrCreateConversation(channelId, topic, thread);
+        // Use thread ID if thread was created, otherwise use channel ID
+        const conversationChannelId = thread ? thread.id : channelId;
+        conversationId = this.getOrCreateConversation(conversationChannelId, topic, thread);
         conversation = this.contextManager.getConversation(conversationId);
 
         if (!conversation) {
@@ -308,7 +348,31 @@ export class DiscordBot {
           return;
         }
 
-        // If in thread, fetch and add previous messages
+        // If thread was just created, add the first message (topic) to the conversation
+        if (thread && !isInThread) {
+          // Get the first message from the thread (the topic message we just posted)
+          try {
+            const messages = await thread.messages.fetch({ limit: 1 });
+            const firstThreadMessage = messages.first();
+            if (firstThreadMessage) {
+              const appMessage: AppMessage = {
+                id: firstThreadMessage.id,
+                conversationId,
+                authorId: firstThreadMessage.author.id,
+                authorType: "user",
+                content: firstThreadMessage.content,
+                replyTo: [],
+                timestamp: firstThreadMessage.createdAt,
+                discordMessageId: firstThreadMessage.id,
+              };
+              this.contextManager.addMessage(conversationId, appMessage);
+            }
+          } catch (error) {
+            logger.warn("Failed to fetch first thread message:", error);
+          }
+        }
+
+        // If in existing thread, fetch and add previous messages
         if (isInThread && thread) {
           const previousMessages = await this.fetchThreadMessages(thread);
           if (previousMessages.length > 0) {
@@ -354,8 +418,11 @@ export class DiscordBot {
 
       // If questions were asked, short-circuit to planning mode
       if (planningResult.type === "questions") {
+        const threadLink = thread 
+          ? ` in <#${thread.id}>` 
+          : "";
         await interaction.editReply({
-          content: `✅ Planning started. Session Planner has asked clarifying questions. Please respond, then use \`/sbb start\` to begin the conversation.`,
+          content: `✅ Planning started${threadLink}. Session Planner has asked clarifying questions. Please respond, then use \`/sbb start\` to begin the conversation.`,
         });
         return;
       }
@@ -378,8 +445,11 @@ export class DiscordBot {
 
         // Auto-start
         await this.sessionPlanner.approveAndStart(conversationId);
+        const threadLink = thread 
+          ? ` in <#${thread.id}>` 
+          : "";
         await interaction.editReply({
-          content: `✅ Conversation started! Plan created and conversation is now active.`,
+          content: `✅ Conversation started${threadLink}! Plan created and conversation is now active.`,
         });
       }
     } catch (error) {
